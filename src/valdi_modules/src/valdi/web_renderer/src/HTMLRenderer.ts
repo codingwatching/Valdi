@@ -4,6 +4,7 @@ import { WebValdiScroll } from './views/WebValdiScroll';
 import { WebValdiView } from './views/WebValdiView';
 import { WebValdiTextField, registerTextFieldElements } from './views/WebValdiTextField';
 import { WebValdiImage } from './views/WebValdiImage';
+import { WebValdiSpinner } from './views/WebValdiSpinner';
 import { UpdateAttributeDelegate } from './ValdiWebRendererDelegate';
 
 export const nodesRef = new Map<number, WebValdiLayout>();
@@ -23,6 +24,8 @@ function initViewClass(viewClass: string, id: number, attributeDelegate?: Update
       return new WebValdiView(id, attributeDelegate);
     case 'image':
       return new WebValdiImage(id, attributeDelegate);
+    case 'spinner':
+      return new WebValdiSpinner(id, attributeDelegate);
     case 'SCValdiDatePicker':
       return new WebValdiView(id, attributeDelegate);
     case 'scroll':
