@@ -1747,6 +1747,20 @@ export interface ScrollView extends _ScrollView, CommonView, ContainerTemplateEl
   fadingEdgeEnd?: boolean;
 
   /**
+   * [Android-Only]
+   * Enable extended fading edge rendering for larger fade lengths.
+   * This uses a custom Porter-Duff compositing implementation to match iOS visual appearance.
+   *
+   * When true and fadingEdgeLength exceeds the native threshold, uses enhanced rendering with square root fade curves.
+   * When false, uses Android's native fading edge (limited by platform constraints).
+   *
+   * TODO: This flag will be removed after validation across all call sites.
+   *
+   * @default: false
+   */
+  androidOnlyEnableExtendedFadingEdge?: boolean;
+
+  /**
    * [iOS-Only]
    * Defines the rate at which the scroll view decelerates after
    * a fling gesture.

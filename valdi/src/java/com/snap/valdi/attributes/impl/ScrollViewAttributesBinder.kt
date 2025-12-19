@@ -129,14 +129,14 @@ class ScrollViewAttributesBinder(private val coordinateResolver: CoordinateResol
 
     fun applyFadingEdgeLength(view: ValdiScrollView, value: Float, animator: ValdiAnimator?) {
         val fadingEdgeLength = coordinateResolver.toPixel(value)
-        val fadingEdgeEnabled = fadingEdgeLength > 0
-        view.setHorizontalFadingEdgeEnabled(fadingEdgeEnabled)
-        view.setVerticalFadingEdgeEnabled(fadingEdgeEnabled)
-        view.setFadingEdgeLength(fadingEdgeLength)
+        view.setCustomFadingEdgeLength(fadingEdgeLength)
     }
 
     fun resetFadingEdgeLength(view: ValdiScrollView, animator: ValdiAnimator?) {
-        applyFadingEdgeLength(view, 0f, animator)
+        view.setCustomFadingEdgeLength(0)
+        view.setHorizontalFadingEdgeEnabled(false)
+        view.setVerticalFadingEdgeEnabled(false)
+        view.setFadingEdgeLength(0)
     }
 
     fun applyFadingEdgeStart(view: ValdiScrollView, value: Boolean, animator: ValdiAnimator?) {
@@ -169,6 +169,14 @@ class ScrollViewAttributesBinder(private val coordinateResolver: CoordinateResol
 
     fun resetBounces(view: ValdiScrollView, animator: ValdiAnimator?) {
         view.bounces = true
+    }
+
+    fun applyAndroidOnlyEnableExtendedFadingEdge(view: ValdiScrollView, value: Boolean, animator: ValdiAnimator?) {
+        view.androidOnlyEnableExtendedFadingEdge = value
+    }
+
+    fun resetAndroidOnlyEnableExtendedFadingEdge(view: ValdiScrollView, animator: ValdiAnimator?) {
+        view.androidOnlyEnableExtendedFadingEdge = false
     }
 
     fun preprocessScrollPerfLoggerBridge(value: Any?): Any {
@@ -206,6 +214,7 @@ class ScrollViewAttributesBinder(private val coordinateResolver: CoordinateResol
         attributesBindingContext.bindBooleanAttribute("fadingEdgeEnd", false, this::applyFadingEdgeEnd, this::resetFadingEdgeEnd)
         attributesBindingContext.bindStringAttribute("decelerationRate", false, this::applyDecelerationRate, this::resetDecelerationRate)
         attributesBindingContext.bindBooleanAttribute("bounces", false, this::applyBounces, this::resetBounces)
+        attributesBindingContext.bindBooleanAttribute("androidOnlyEnableExtendedFadingEdge", false, this::applyAndroidOnlyEnableExtendedFadingEdge, this::resetAndroidOnlyEnableExtendedFadingEdge)
 
         attributesBindingContext.registerPreprocessor("scrollPerfLoggerBridge", false, this::preprocessScrollPerfLoggerBridge)
     }
