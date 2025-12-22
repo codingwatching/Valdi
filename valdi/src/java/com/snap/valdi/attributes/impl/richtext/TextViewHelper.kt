@@ -243,7 +243,8 @@ class TextViewHelper(private val view: TextView,
 
     fun convertAttributedText(text: AttributedText): Spannable {
         val fontAttributes = this.fontAttributes ?: defaultAttributes
-        return textConverter.convert(text, fontAttributes, this, disableTextReplacement)
+        val density = view.resources.displayMetrics.density
+        return textConverter.convert(text, fontAttributes, this, disableTextReplacement, density)
     }
 
     fun drawOnTopAttributedText(canvas: Canvas, layout: Layout, text: AttributedText) {

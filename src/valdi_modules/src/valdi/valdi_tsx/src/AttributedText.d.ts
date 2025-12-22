@@ -1,4 +1,5 @@
 import { LabelTextDecoration } from './NativeTemplateElements';
+import { AttributedTextInlineImageAttachment } from './AttributedTextInlineImageAttachment';
 
 export type AttributedTextOnTap = () => void;
 export type AttributedTextOnLayout = (x: number, y: number, width: number, height: number) => void;
@@ -67,6 +68,12 @@ export const enum AttributedTextEntryType {
    * Pushes an outer outline width at the top of the style stack.
    */
   PushOuterOutlineWidth,
+  /**
+   * Pushes an inline image attachment at the top of the style stack.
+   * The value should be an AttributedTextInlineImageAttachment object.
+   * Content should be the Unicode Object Replacement Character (U+FFFC).
+   */
+  PushInlineImage,
 }
 
 export type AttributedTextChunk =
@@ -74,6 +81,7 @@ export type AttributedTextChunk =
   | string
   | number
   | AttributedTextOnTap
-  | AttributedTextOnLayout;
+  | AttributedTextOnLayout
+  | AttributedTextInlineImageAttachment;
 
 export type AttributedText = AttributedTextChunk[];
