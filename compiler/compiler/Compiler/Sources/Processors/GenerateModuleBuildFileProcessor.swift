@@ -30,6 +30,7 @@ private struct ModuleBuildTargetConfig {
     let protoDeclSourceDirs: SourceDirTracking
 
     let disableAnnotationProcessing: Bool
+    let asyncStrictMode: Bool
     let stringsDir: String?
     let idsYaml: String?
     let noCompiledValdiModuleOutput: Bool
@@ -319,6 +320,8 @@ private struct ModuleBuildFile {
 
         maybeAppendBoolAttribute("disable_annotation_processing", value: config.disableAnnotationProcessing, appendOnlyIf: .valueTrue)
 
+        maybeAppendBoolAttribute("async_strict_mode", value: config.asyncStrictMode, appendOnlyIf: .valueTrue)
+
         maybeAppendBoolAttribute("downloadable_assets", value: config.downloadableAssets, appendOnlyIf: .valueFalse)
 
         maybeAppendBoolAttribute("no_compiled_valdimodule_output", value: config.noCompiledValdiModuleOutput, appendOnlyIf: .valueTrue)
@@ -555,6 +558,7 @@ final class GenerateModuleBuildFileProcessor: CompilationProcessor {
                                              sqlDatabaseNames: sqlDatabaseNames,
                                              protoDeclSourceDirs: protoDeclSourceDirs,
                                              disableAnnotationProcessing: bundleInfo.disableAnnotationProcessing,
+                                             asyncStrictMode: bundleInfo.asyncStrictMode,
                                              stringsDir: bundleInfo.stringsConfig?.bundleRelativePath,
                                              idsYaml: idsYaml,
                                              noCompiledValdiModuleOutput: noCompiledValdiModuleOutput,

@@ -55,6 +55,7 @@ def valdi_module(
         module_yaml = None,
         strings_dir = None,
         disable_annotation_processing = False,
+        async_strict_mode = False,
         ids_yaml = None,
         sql_db_names = None,
         sql_srcs = [],
@@ -110,6 +111,7 @@ def valdi_module(
         deps: The dependencies of the valdi module.
         strings_dir: The directory containing the strings files.
         disable_annotation_processing: Flag to disable annotation processing.
+        async_strict_mode: When true, raise exceptions for sync calls made by native code.
         disable_dependency_verification: Flag to disable verification of module dependencies
         disable_code_coverage: Flag to disable code coverage reporting.
         disable_hotreload: Flag to disable hotreload
@@ -156,6 +158,7 @@ def valdi_module(
         ids_yaml = ids_yaml,
         strings_json_srcs = strings_json_srcs,
         disable_annotation_processing = disable_annotation_processing,
+        async_strict_mode = async_strict_mode,
         sql_db_names = sql_db_names,
         sql_srcs = sql_srcs,
         has_dependency_data = len(ios_generated_context_factories) > 0,

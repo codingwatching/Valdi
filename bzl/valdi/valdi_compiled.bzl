@@ -52,6 +52,7 @@ ValdiModuleInfo = provider(
         "name": "The name of this valdi module. Usually it's snake_cased (e.g. your_module)",
         "deps": "The deps of the modules",
         "disable_annotation_processing": "When set to true, will not expect any Valdi annotation processing to occur for this module. In practice, that means that the .dumped-symbols.json output will not be created",
+        "async_strict_mode": "When set to true, raise exceptions for sync calls made by native code in this module",
         "android_debug_resource_files": "Android debug resources",
         "android_release_resource_files": "Android release resources",
         "android_debug_valdimodule": "generated .valdimodule file for this Valdi module",
@@ -228,6 +229,10 @@ valdi_compiled = rule(
         ),
         "disable_annotation_processing": attr.bool(
             doc = "When set to true, will not expect any Valdi annotation processing to occur for this module.",
+            default = False,
+        ),
+        "async_strict_mode": attr.bool(
+            doc = "When set to true, raise exceptions for sync calls made by native code in this module.",
             default = False,
         ),
         "sql_srcs": attr.label_list(
@@ -1269,6 +1274,7 @@ disable_code_coverage: {disable_code_coverage}
 disable_hotreload: {disable_hotreload}
 disable_annotation_processing: {disable_annotation_processing}
 disable_dependency_verification: {disable_dependency_verification}
+async_strict_mode: {async_strict_mode}
 
 {exclude_patterns}
 {exclude_globs}
@@ -1286,6 +1292,7 @@ compilation_mode: {compilation_mode}
         disable_hotreload = "true" if attr.disable_hotreload else "false",
         disable_annotation_processing = "true" if attr.disable_annotation_processing else "false",
         disable_dependency_verification = "true" if attr.disable_dependency_verification else "false",
+        async_strict_mode = "true" if attr.async_strict_mode else "false",
         dependencies_str = dependencies_str,
         android_class_path = "class_path: {}".format(attr.android_class_path) if attr.android_class_path else "",
         exclude_patterns = _yaml_named_list("exclude_patterns", attr.exclude_patterns),
@@ -1344,6 +1351,8 @@ def _create_valdi_module_info(ctx, module_name, module_yaml, module_definition, 
         module_definition = module_definition,
         base_path = base_path,
         deps = depset(direct = ctx.attr.deps, transitive = [d[ValdiModuleInfo].deps for d in ctx.attr.deps]),
+        disable_annotation_processing = ctx.attr.disable_annotation_processing,
+        async_strict_mode = ctx.attr.async_strict_mode,
 
         # Prepared upload artifact
         prepared_upload_artifact = _extract_prepared_upload_artifact(ctx.attr.prepared_upload_artifact_name, outputs) if ctx.attr.prepared_upload_artifact_name else None,
