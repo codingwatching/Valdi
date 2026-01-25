@@ -377,12 +377,6 @@ object ViewUtils {
 
     fun setIsRightToLeft(view: View, isRightToLeft: Boolean) {
         getOrCreateValdiObjects(view).isRightToLeft = isRightToLeft
-
-        view.layoutDirection = if (isRightToLeft) {
-            View.LAYOUT_DIRECTION_RTL
-        } else {
-            View.LAYOUT_DIRECTION_LTR
-        }
     }
 
     /**
