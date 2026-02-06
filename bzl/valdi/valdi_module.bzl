@@ -563,6 +563,8 @@ def _setup_ios_target(name, module_deps, ios_deps, compiled_module_target, ios_m
                 debug = [":ios.debug.srcs"],
                 release = [":ios.release.srcs"],
             )
+        else:
+            swift_srcs = ["@valdi//bzl/valdi:empty.swift"]
         if "objc" in ios_language:
             api_objc_hdrs = source_set_select(
                 debug = [":ios.debug.api.hdrs"],
@@ -689,12 +691,14 @@ def _setup_ios_target(name, module_deps, ios_deps, compiled_module_target, ios_m
             name = "ios.debug.resource_bundle",
             compiled_module = compiled_module_target,
             output_name = "ios_debug_bundle_resources",
+            empty_bundle_fallback = "@valdi//bzl/valdi:empty_bundle",
         )
 
         extract_valdi_module_output(
             name = "ios.release.resource_bundle",
             compiled_module = compiled_module_target,
             output_name = "ios_release_bundle_resources",
+            empty_bundle_fallback = "@valdi//bzl/valdi:empty_bundle",
         )
 
         apple_bundle_import(

@@ -6,12 +6,30 @@ exports_files([
     "AndroidManifest.xml.tpl",
     "valdi_config.yaml.tpl",
     "empty.c",
+    "empty.swift",
     "empty.kt",
     "empty.js",
+    "Empty.bundle/Info.plist",
     "Info.plist",
     "package.json.tmpl",
     "tsconfig.json",
 ])
+
+# No-op fallback for extract_valdi_module_output when no empty fallback is needed.
+# Must be public: any package that uses extract_valdi_module_output (e.g. valdi_module in jasmine, apps, etc.) depends on this default when not passing empty_bundle_fallback.
+filegroup(
+    name = "empty_bundle_fallback_none",
+    srcs = [],
+    visibility = ["//visibility:public"],
+)
+
+# Placeholder so resource_bundle extract targets never produce zero files (apple_bundle_import requires path containing ".bundle").
+# Must be public: valdi_module.bzl references this from arbitrary packages when has_resource_bundle is True.
+filegroup(
+    name = "empty_bundle",
+    srcs = ["Empty.bundle/Info.plist"],
+    visibility = ["//visibility:public"],
+)
 
 # Flag to control the valdi compilation log level
 string_flag(
