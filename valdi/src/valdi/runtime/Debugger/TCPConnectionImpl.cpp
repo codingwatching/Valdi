@@ -84,9 +84,11 @@ void TCPConnectionImpl::close(const Error& error) {
 
         _closed = true;
 
-        boost::system::error_code ec;
-        _socket.shutdown(boost::asio::ip::tcp::socket::shutdown_send, ec);
-        _socket.close(ec);
+        if (_socket.is_open()) {
+            boost::system::error_code ec;
+            _socket.shutdown(boost::asio::ip::tcp::socket::shutdown_send, ec);
+            _socket.close(ec);
+        }
 
         listener = _disconnectListener;
     }
