@@ -28,11 +28,18 @@ jobs:
               return;
             }
             const pr = context.payload.pull_request;
+            const repo = { owner: context.repo.owner, repo: context.repo.repo };
+
+            // GITHUB_TOKEN is read-only for PRs from forks; skip so the job still succeeds
+            const isFork = pr.head.repo && (pr.head.repo.full_name !== `${repo.owner}/${repo.repo}`);
+            if (isFork) {
+              console.log('Skipping: PR is from a fork. Labels cannot be applied (token has read-only access).');
+              return;
+            }
             
             // Get ALL files changed in the PR (handles pagination automatically)
             const files = await github.paginate(github.rest.pulls.listFiles, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              ...repo,
               pull_number: pr.number,
             });
             
@@ -64,31 +71,45 @@ jobs:
             // Get existing labels
             const existingLabels = pr.labels.map(label => label.name);
             
-            // Remove old size labels
+            // Remove old size labels (ignore 404 — label may already be gone)
             const sizeLabels = ['size/XS', 'size/S', 'size/M', 'size/L', 'size/XL'];
             const labelsToRemove = existingLabels.filter(label => 
               sizeLabels.includes(label) && label !== sizeLabel
             );
             
             for (const label of labelsToRemove) {
-              await github.rest.issues.removeLabel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr.number,
-                name: label,
-              });
-              console.log(`Removed label: ${label}`);
+              try {
+                await github.rest.issues.removeLabel({
+                  ...repo,
+                  issue_number: pr.number,
+                  name: label,
+                });
+                console.log(`Removed label: ${label}`);
+              } catch (err) {
+                if (err.status === 404) {
+                  console.log(`Label ${label} not on PR (already removed or race), skipping`);
+                } else {
+                  throw err;
+                }
+              }
             }
             
             // Add new size label if not already present
             if (!existingLabels.includes(sizeLabel)) {
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr.number,
-                labels: [sizeLabel],
-              });
-              console.log(`Added label: ${sizeLabel}`);
+              try {
+                await github.rest.issues.addLabels({
+                  ...repo,
+                  issue_number: pr.number,
+                  labels: [sizeLabel],
+                });
+                console.log(`Added label: ${sizeLabel}`);
+              } catch (err) {
+                if (err.status === 403 || err.status === 404) {
+                  console.log(`Could not add label (${err.status}): ${err.message}`);
+                } else {
+                  throw err;
+                }
+              }
             }
             
             // Add a comment with size breakdown (only on first run)
@@ -98,20 +119,23 @@ jobs:
                 .slice(0, 10)
                 .map(f => `- \`${f.filename}\`: +${f.additions} -${f.deletions}`)
                 .join('\n');
+              const moreFiles = files.length > 10 ? '\n\n_...and ' + (files.length - 10) + ' more files_' : '';
+              const comment = '## 📊 PR Size: **' + sizeLabel + '**\n\n'
+                + '**Total changes:** ' + totalChanges + ' lines (' + files.length + ' files)\n\n'
+                + '**Top files changed:**\n' + filesList + moreFiles
+                + '\n\n<sub>Size calculated as additions + deletions. Labels: XS (<10), S (<50), M (<250), L (<1000), XL (1000+)</sub>';
               
-              const comment = `## 📊 PR Size: **${sizeLabel}**
-
-**Total changes:** ${totalChanges} lines (${files.length} files)
-
-**Top files changed:**
-${filesList}${files.length > 10 ? `\n\n_...and ${files.length - 10} more files_` : ''}
-
-<sub>Size calculated as additions + deletions. Labels: XS (<10), S (<50), M (<250), L (<1000), XL (1000+)</sub>`;
-              
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr.number,
-                body: comment,
-              });
+              try {
+                await github.rest.issues.createComment({
+                  ...repo,
+                  issue_number: pr.number,
+                  body: comment,
+                });
+              } catch (err) {
+                if (err.status === 403 || err.status === 404) {
+                  console.log(`Could not create comment (${err.status}): ${err.message}`);
+                } else {
+                  throw err;
+                }
+              }
             }
