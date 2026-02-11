@@ -148,6 +148,9 @@ interface NativeClass {
 @ExportModule(class: NativeClass);
 ```
 
+> [!Important]
+> **Marshalling:** `@ExportModel` and `@ExportProxy` use **different marshalling APIs** on Objective-C. Using `SCValdiMarshallableObjectMarshall` for a proxy type is incorrect and can cause subtle bugs. See [ExportModel vs ExportProxy: Marshalling](export-model-vs-export-proxy-marshalling.md) for details and how to marshal each type correctly.
+
 ### Component Annotations
 
 These annotations mark component-related interfaces and classes.
