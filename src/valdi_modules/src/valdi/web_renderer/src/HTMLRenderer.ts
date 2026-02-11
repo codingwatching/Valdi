@@ -6,6 +6,7 @@ import { WebValdiTextField, registerTextFieldElements } from './views/WebValdiTe
 import { WebValdiTextView } from './views/WebValdiTextView';
 import { WebValdiImage } from './views/WebValdiImage';
 import { WebValdiSpinner } from './views/WebValdiSpinner';
+import { WebValdiVideo } from './views/WebValdiVideo';
 import { UpdateAttributeDelegate } from './ValdiWebRendererDelegate';
 
 export const nodesRef = new Map<number, WebValdiLayout>();
@@ -34,7 +35,11 @@ function initViewClass(viewClass: string, id: number, attributeDelegate?: Update
     case 'textfield':
       return new WebValdiTextField(id, attributeDelegate);
     case 'textview':
+    case 'SCValdiTextView':
       return new WebValdiTextView(id, attributeDelegate);
+    case 'video':
+    case 'SCValdiVideoView':
+      return new WebValdiVideo(id, attributeDelegate);
 
     default:
       throw new Error(`Unknown viewClass: ${viewClass}`);
@@ -43,7 +48,6 @@ function initViewClass(viewClass: string, id: number, attributeDelegate?: Update
 
 export function createElement(id: number, viewClass: string, attributeDelegate?: UpdateAttributeDelegate) {
   const element = initViewClass(viewClass, id, attributeDelegate);
-
   nodesRef.set(id, element);
   return element;
 }
@@ -82,8 +86,6 @@ export function changeAttributeOnElement(id: number, attributeName: string, attr
     throw new Error(`changeAttributeOnElement: element is missing, id: ${id}`);
   }
 
-  // Stripping $ prefix for injected attributes to match native behavior.
-  // Injected attributes like $width, $height should become width, height respectively.
   const actualAttributeName = attributeName.startsWith('$') ? attributeName.substring(1) : attributeName;
 
   element.changeAttribute(actualAttributeName, attributeValue);
