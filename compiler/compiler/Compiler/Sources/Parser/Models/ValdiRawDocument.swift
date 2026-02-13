@@ -316,6 +316,15 @@ struct IOSType: Codable {
         let filename = importHeaderFilename(kind: kind)
         if let importPrefix = importPrefix {
             if isImportPrefixOverridden {
+                if fromSingleFileCodegen {
+                    // If the import prefix is explicitly overridden (eg. with iosImportPrefix)
+                    // AND the type comes from a single_file_codegen module, then the final 
+                    // output type should map to an external native header.
+                    // For example, if iosImportPrefix is "valdi_core" and the type is "INavigator",
+                    // then output should be <valdi_core/INavigator.h>, not <valdi_core/SCCNavigationTypes.h>
+                    // Return the header with the type's name, instead of using the consolidated module header.
+                    return "<\(importPrefix)/\(name).h>"
+                }
                 return "<\(importPrefix)/\(filename)>"
             } else {
                 let suffix: String
