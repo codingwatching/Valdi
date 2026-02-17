@@ -1,6 +1,62 @@
 load(":valdi_compiled.bzl", "ValdiModuleInfo")
 
+def _dest_native(rel):
+    """Canonical path for a file in the native/ tree: <module>/web/<file> or module path.
+
+    Used by both collapse_web_paths (where to put the file) and generate_register_native_modules
+    (require path). Must be the single source of truth for native layout."""
+    parts = rel.split("/")
+    for i, seg in enumerate(parts):
+        if seg == "web":
+            parent = parts[i - 1] if i > 0 else ""
+            tail = "/".join(parts[i + 1:])
+            base = (parent + "/web") if parent else "web"
+            return base + ("/" + tail if tail else "")
+    return "/".join(parts)
+
+# Dest path substrings that should not be registered (test files, etc).
+# Shared by collapse_web_paths and generate_register_native_modules so native layout stays in sync.
+_REGISTER_NATIVE_EXCLUDE_SUBSTRINGS = [
+    "/test/",
+    ".test.",
+    ".spec.",
+    "_debugging/",  # Optional/debug-only modules (e.g. ..._debugging/web/); not bundled in web package
+]
+
+def _should_register_native_module(dest_path):
+    """Exclude test files and modules that are not suitable for web bundle."""
+    for sub in _REGISTER_NATIVE_EXCLUDE_SUBSTRINGS:
+        if sub in dest_path:
+            return False
+    return True
+
+def _is_native_module_js(rel):
+    """True if this short_path is a native module .js that gets require(pkg/native/...) in RegisterNativeModules.js."""
+    d = _dest_native(rel)
+    if not d.endswith(".js"):
+        return False
+    if "/web/debug/" in d or "/web/release/" in d:
+        return False
+    return _should_register_native_module(d)
+
+def _should_exclude_from_package(short_path):
+    """True if this file should not be copied into the collapsed package (test files, tree root, or unregistered native .js)."""
+    for sub in _REGISTER_NATIVE_EXCLUDE_SUBSTRINGS:
+        if sub in short_path:
+            return True
+
+    # web_native tree root (directory): skip so we only copy expanded files, not the whole tree
+    idx = short_path.rfind("web_native")
+    if idx >= 0 and not short_path[idx + len("web_native"):].lstrip("/"):
+        return True
+    d = _dest_native(short_path)
+    if d.endswith(".js") and not _should_register_native_module(d):
+        return True
+    return False
+
 def _dest(rel):
+    """Maps a source short_path to its destination path in the collapsed npm package."""
+
     # Handle package.json - keep it at root
     if rel.endswith("package.json"):
         return "package.json"
@@ -9,11 +65,13 @@ def _dest(rel):
     if rel.endswith("RegisterNativeModules.js"):
         return "src/RegisterNativeModules.js"
 
-    if "web_native" in rel:
-        return "native"
-
     if "protodecl_collapsed" in rel:
         return "src"
+
+    # Single source of truth for native module .js: same predicate as generate_register_native_modules.
+    # Any path that would get a require(pkg/native/...) there goes to native/<dest_native> here.
+    if _is_native_module_js(rel):
+        return "native/" + _dest_native(rel)
 
     # Handle external repository paths (short_path starts with ../ for external repos)
     # and regular source paths. Extract everything after /src/valdi_modules/src/valdi/
@@ -62,17 +120,20 @@ def _impl(ctx):
     package_name = ctx.attr.package_name
     exclude_jsx = ctx.attr.exclude_jsx_global_declaration
 
-    # build a small manifest of src → dest
+    # Build manifest src → dest. Deduplicate by dest (first source wins) so the same logical file
+    # from tree artifact and filegroup doesn't trigger duplicate copies.
     manifest = ctx.actions.declare_file(ctx.label.name + ".manifest")
+    seen_dest = {}
     lines = []
     for f in ctx.files.srcs:
-        # Check if file should be excluded (JSX.d.ts when exclude_jsx is True)
-        excluded = False
         if exclude_jsx and "valdi_tsx/src/JSX.d.ts" in f.short_path:
-            excluded = True
-
-        if not excluded:
-            lines.append("{}\t{}".format(f.path, _dest(f.short_path)))
+            continue
+        if _should_exclude_from_package(f.short_path):
+            continue
+        d = _dest(f.short_path)
+        if d not in seen_dest:
+            seen_dest[d] = True
+            lines.append("{}\t{}".format(f.path, d))
 
     # If excluding JSX global declaration, add stub file from valdi_tsx/web
     if exclude_jsx:
@@ -150,20 +211,6 @@ collapse_web_paths = rule(
     },
 )
 
-def _dest_native(rel):
-    parts = rel.split("/")
-
-    # 2) Keep "<parent>/web/<tail>" where "web" is the marker
-    for i, seg in enumerate(parts):
-        if seg == "web":
-            parent = parts[i - 1] if i > 0 else ""
-            tail = "/".join(parts[i + 1:])
-            base = (parent + "/web") if parent else "web"
-            return base + ("/" + tail if tail else "")
-
-    # 3) If there's no "web" segment, just return the path
-    return "/".join(parts)
-
 def _impl_native(ctx):
     outdir = ctx.actions.declare_directory(ctx.label.name)
 
@@ -229,21 +276,6 @@ def _module_id_from_native_dest(dest_path):
         return file_part
     return parent + "/src/" + file_part
 
-# Dest path substrings that should not be registered (test files, Node-only or optional modules)
-_REGISTER_NATIVE_EXCLUDE_SUBSTRINGS = [
-    "/test/",
-    ".test.",
-    ".spec.",
-    "_debugging/",  # Optional/debug-only modules (e.g. ..._debugging/web/); not bundled in web package
-]
-
-def _should_register_native_module(dest_path):
-    """Exclude test files and modules that are not suitable for web bundle."""
-    for sub in _REGISTER_NATIVE_EXCLUDE_SUBSTRINGS:
-        if sub in dest_path:
-            return False
-    return True
-
 def _merge_module_id_overrides_from_modules(modules):
     """Collect web_register_native_module_id_overrides from all transitive Valdi modules."""
     all_modules = depset(direct = modules, transitive = [m[ValdiModuleInfo].deps for m in modules])
@@ -256,6 +288,7 @@ def _merge_module_id_overrides_from_modules(modules):
 
 def _generate_register_native_modules_impl(ctx):
     package_name = ctx.attr.package_name
+
     # Overrides: first from each module's ValdiModuleInfo, then BUILD-level overrides on top
     module_id_overrides = dict(_merge_module_id_overrides_from_modules(ctx.attr.modules))
     module_id_overrides.update(ctx.attr.module_id_overrides)
