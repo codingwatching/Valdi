@@ -48,6 +48,10 @@ export function hexToRGBColor(hex: string): RGBColor {
 }
 
 export function generateStyles(attribute: string, value: any): Partial<CSSStyleDeclaration> {
+  if (value === undefined || value === null) {
+    return { [attribute]: '' };
+  }
+
   if (attribute === 'font') {
     const [fontFamily, fontSize, fontWeight] = value.split(' ');
     return {
@@ -73,6 +77,13 @@ export function generateStyles(attribute: string, value: any): Partial<CSSStyleD
   }
 
   if (attribute === 'borderRadius') {
+    if (value === '50%') {
+      // The 9999px value is a standard CSS trick that:
+      // Creates a pill shape for rectangular elements (rounds corners to half the smaller dimension)
+      // Creates a circle for square elements
+      return { borderRadius: '9999px' };
+    }
+    
     // Handle borderRadius values - can be numbers (px), percentages, or other CSS values
     if (typeof value === 'string' && value.includes('%')) {
       return { borderRadius: value };
@@ -96,6 +107,7 @@ export function generateStyles(attribute: string, value: any): Partial<CSSStyleD
         return { borderRadius: processedParts.join(' ') };
       }
     }
+
     // Other string values (like 'inherit', 'initial', or strings with units) - pass through as-is
     return { borderRadius: value };
   }

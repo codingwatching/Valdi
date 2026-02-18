@@ -13,6 +13,9 @@ export class WebValdiImage extends WebValdiLayout {
   private _contentScaleX = 1;
   private _contentScaleY = 1;
   private _flipOnRtl = false;
+  private _explicitWidth: number | string | undefined;
+  private _explicitHeight: number | string | undefined;
+  private _rotation = 0;
 
   constructor(id: number, attributeDelegate?: UpdateAttributeDelegate) {
     super(id, attributeDelegate);
@@ -56,9 +59,19 @@ export class WebValdiImage extends WebValdiLayout {
     const { naturalWidth: iw, naturalHeight: ih } = this.img;
     if (iw === 0 || ih === 0) return;
 
+    if (!this._explicitWidth && !this._explicitHeight) {
+      const isRotated90or270 = Math.abs(Math.abs(this._rotation) % Math.PI - Math.PI / 2) < 0.01;
+      if (isRotated90or270) {
+        this.htmlElement.style.width = `${ih}px`;
+        this.htmlElement.style.height = `${iw}px`;
+      } else {
+        this.htmlElement.style.width = `${iw}px`;
+        this.htmlElement.style.height = `${ih}px`;
+      }
+    }
+
     const { width: cw, height: ch } = canvas.getBoundingClientRect();
     if (cw === 0 || ch === 0) {
-      // If canvas has no size from layout, use image size.
       canvas.width = iw;
       canvas.height = ih;
     } else {
@@ -76,38 +89,40 @@ export class WebValdiImage extends WebValdiLayout {
       ctx.translate(-canvas.width, 0);
     }
 
-    // Handle content transforms (scale, rotation)
-    ctx.save();
-    ctx.translate(canvas.width / 2, canvas.height / 2);
-    ctx.rotate((this._contentRotation * Math.PI) / 180);
-    ctx.scale(this._contentScaleX, this._contentScaleY);
-    ctx.translate(-canvas.width / 2, -canvas.height / 2);
-
-    // Handle objectFit
-    let dx = 0,
-      dy = 0,
-      dw = canvas.width,
-      dh = canvas.height;
+    // Handle objectFit - use rotated dimensions for 90°/270° rotations
+    const isRotated90or270 = Math.abs(Math.abs(this._rotation) % Math.PI - Math.PI / 2) < 0.01;
+    const effectiveIw = isRotated90or270 ? ih : iw;
+    const effectiveIh = isRotated90or270 ? iw : ih;
+    
+    let dw = effectiveIw,
+      dh = effectiveIh;
     if (this._objectFit !== 'fill') {
-      const imageAspectRatio = iw / ih;
-      const canvasAspectRatio = canvas.width / canvas.height;
       let scale = 1;
       if (this._objectFit === 'contain') {
-        scale = Math.min(canvas.width / iw, canvas.height / ih);
+        scale = Math.min(canvas.width / effectiveIw, canvas.height / effectiveIh);
       } else if (this._objectFit === 'cover') {
-        scale = Math.max(canvas.width / iw, canvas.height / ih);
+        scale = Math.max(canvas.width / effectiveIw, canvas.height / effectiveIh);
       } else if (this._objectFit === 'scale-down') {
-        scale = Math.min(1, Math.min(canvas.width / iw, canvas.height / ih));
+        scale = Math.min(1, Math.min(canvas.width / effectiveIw, canvas.height / effectiveIh));
       } // 'none' means scale = 1
-
-      dw = iw * scale;
-      dh = ih * scale;
-      dx = (canvas.width - dw) / 2;
-      dy = (canvas.height - dh) / 2;
+      dw = effectiveIw * scale;
+      dh = effectiveIh * scale;
+    } else {
+      dw = canvas.width;
+      dh = canvas.height;
     }
 
-    // Draw the image
-    ctx.drawImage(this.img, dx, dy, dw, dh);
+    // Handle content transforms (scale, rotation) - draw centered and rotated
+    const totalRotation = (this._contentRotation * Math.PI) / 180 + this._rotation;
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate(totalRotation);
+    ctx.scale(this._contentScaleX, this._contentScaleY);
+
+    // Draw image centered at origin (rotation happens around center)
+    const drawW = isRotated90or270 ? dh : dw;
+    const drawH = isRotated90or270 ? dw : dh;
+    ctx.drawImage(this.img, -drawW / 2, -drawH / 2, drawW, drawH);
     ctx.restore(); // Restore from content transforms
 
     // Apply tint
@@ -190,6 +205,18 @@ export class WebValdiImage extends WebValdiLayout {
         return;
       case 'ref':
         // This is likely for framework-level component references. No-op at this level.
+        return;
+      case 'width':
+        this._explicitWidth = attributeValue;
+        super.changeAttribute(attributeName, attributeValue);
+        return;
+      case 'height':
+        this._explicitHeight = attributeValue;
+        super.changeAttribute(attributeName, attributeValue);
+        return;
+      case 'rotation':
+        this._rotation = Number(attributeValue) || 0;
+        this.updateImage();
         return;
     }
 
