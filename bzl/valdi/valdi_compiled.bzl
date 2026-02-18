@@ -397,7 +397,7 @@ def _invoke_valdi_compiler(ctx, module_name, module_yaml):
         outputs = outputs,
         inputs = all_inputs + [config_yaml_file, explicit_input_list_file],
         mnemonic = "ValdiCompile",
-        progress_message = "Compiling Valdi module: " + module_name,
+        progress_message = "Compiling Valdi module: " + str(ctx.label),
         use_worker = True,
     )
 
