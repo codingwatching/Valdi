@@ -21,3 +21,5 @@ export { map } from './operators/map';
 export { tap } from './operators/tap';
 export { filter } from './operators/filter';
 export { distinctUntilChanged } from './operators/distinctUntilChanged';
+
+export { combineLatest } from './observable/combineLatest';
