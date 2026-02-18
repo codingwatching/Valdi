@@ -150,9 +150,9 @@ export class App extends StatefulComponent<{}, State> {
 
     await context.onAllAssetsLoaded();
 
-    context.layout(componentWidth, componentHeight, false);
+    await context.layout(componentWidth, componentHeight, false);
 
-    const frame = context.draw();
+    const { frame } = await context.draw();
 
     const scale = Device.getDisplayScale() / DOWNSCALE_RATIO[this.state.downscaleRatioIndex];
     const rasterWidth = Math.floor(scale * componentWidth);
