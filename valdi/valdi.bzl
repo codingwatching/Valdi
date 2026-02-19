@@ -1,8 +1,8 @@
-load("@android_macros//:android.bzl", "aar_import")
 load("@valdi//bzl:valdi_library.bzl", "COMMON_COMPILE_FLAGS")
 load("@valdi//bzl/android:filter_jar.bzl", "filter_jar")
 load("@valdi//bzl/android:package_aar.bzl", "package_aar")
 load("@valdi//bzl/android:platform_transition.bzl", "android_aar_platforms")
+load("@valdi//bzl/macros:android.bzl", "aar_import")
 
 COMPILER_FLAGS = [
     # '-Os', # Uncomment to enable optimizations

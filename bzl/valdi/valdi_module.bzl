@@ -1,9 +1,9 @@
 """ This file contains a convenient macro to wrap valdi_compiled rule. Use this macro instead of direct valdi_compiled rule invocation. """
 
-load("@android_macros//:android.bzl", "android_library")
 load("@bazel_skylib//lib:new_sets.bzl", "sets")
 load("@build_bazel_rules_apple//apple:resources.bzl", "apple_bundle_import", "apple_resource_group")
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_android//rules:rules.bzl", "android_library")
 load("@rules_hdrs//hmap:hmap.bzl", "headermap")
 load("@rules_hdrs//umbrella_header:umbrella_header.bzl", "umbrella_header")
 load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
