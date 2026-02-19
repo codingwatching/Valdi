@@ -21,6 +21,7 @@
 #include "valdi/runtime/Interfaces/IViewManager.hpp"
 #include "valdi/runtime/Interfaces/IViewTransaction.hpp"
 #include "valdi/runtime/Utils/MainThreadManager.hpp"
+#include "valdi/runtime/ValdiBuildFlags.hpp"
 #include "valdi/runtime/Views/MeasureDelegate.hpp"
 #include "valdi/runtime/Views/ViewTransactionScope.hpp"
 #include "valdi_core/cpp/Constants.hpp"
@@ -2067,7 +2068,11 @@ bool ViewNode::calculateLayoutOnNodeIfNeeded(YGNode* yogaNode,
     auto backendString = getBackendString(getBackend(_viewNodeTree));
     auto module = getModuleName();
 
+#if VALDI_DEBUG_TREE_UPDATES
+    VALDI_TRACE_META("Valdi.calculateLayout", std::to_string(getRecursiveChildCount()));
+#else
     VALDI_TRACE("Valdi.calculateLayout");
+#endif
     auto metricsObj = getMetrics();
     ScopedMetrics metrics = isFromLazyLayout ?
                                 Metrics::scopedCalculateLazyLayoutLatency(metricsObj, module, backendString) :

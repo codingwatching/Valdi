@@ -22,6 +22,7 @@
 #include "valdi_core/cpp/Utils/TrackedLock.hpp"
 #include "valdi_core/cpp/Utils/ValdiObject.hpp"
 #include <deque>
+#include <string>
 #include <vector>
 
 namespace Valdi {
@@ -42,9 +43,15 @@ class Metrics;
 struct ViewNodeTreeUpdates {
     DispatchFunction performUpdates;
     DispatchFunction completion;
+    /** Optional trigger reason for tracing (e.g. "render_request", "setLayoutSpecs", "reapply_attributes:height"). */
+    std::string traceTrigger;
 
-    inline ViewNodeTreeUpdates(DispatchFunction&& performUpdates, DispatchFunction&& completion)
-        : performUpdates(std::move(performUpdates)), completion(std::move(completion)) {}
+    inline ViewNodeTreeUpdates(DispatchFunction&& performUpdates,
+                               DispatchFunction&& completion,
+                               std::string traceTrigger = {})
+        : performUpdates(std::move(performUpdates)),
+          completion(std::move(completion)),
+          traceTrigger(std::move(traceTrigger)) {}
 };
 
 class ViewNodeTreeDisableUpdates;
@@ -182,6 +189,14 @@ public:
      all the pending exclusive updates have finished running.
      */
     void scheduleExclusiveUpdate(DispatchFunction updateFunction, DispatchFunction completion);
+
+    /**
+     Schedule an exclusive update with an optional trace trigger (e.g. "render_request",
+     "reapply_attributes:height,padding") for visibility in traces.
+     */
+    void scheduleExclusiveUpdate(DispatchFunction updateFunction,
+                                 DispatchFunction completion,
+                                 std::string traceTrigger);
 
     void withLock(const DispatchFunction& fn);
 

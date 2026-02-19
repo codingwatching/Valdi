@@ -41,6 +41,7 @@
 #include "valdi_core/cpp/Utils/ValueFunction.hpp"
 
 #include "valdi/runtime/Runtime.hpp"
+#include "valdi/runtime/ValdiBuildFlags.hpp"
 #include "valdi_core/cpp/Utils/Function.hpp"
 
 #include "valdi/android/AccessibilityBridge.hpp"
@@ -816,7 +817,13 @@ void ValdiAndroid::NativeBridge::scheduleExclusiveUpdate( // NOLINT
 
     auto runnableRef = Valdi::makeShared<ValdiAndroid::JavaRunnable>(ValdiAndroid::JavaEnv(), runnable);
 
-    viewNodeTree->scheduleExclusiveUpdate([runnableRef = std::move(runnableRef)]() { (*runnableRef)(); });
+#if VALDI_DEBUG_TREE_UPDATES
+    viewNodeTree->scheduleExclusiveUpdate(
+        [runnableRef = std::move(runnableRef)]() { (*runnableRef)(); }, Valdi::DispatchFunction(), "native_bridge");
+#else
+    viewNodeTree->scheduleExclusiveUpdate([runnableRef = std::move(runnableRef)]() { (*runnableRef)(); },
+                                          Valdi::DispatchFunction());
+#endif
 }
 
 void ValdiAndroid::NativeBridge::setViewInflationEnabled( // NOLINT

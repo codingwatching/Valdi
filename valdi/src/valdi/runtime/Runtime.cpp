@@ -11,6 +11,7 @@
 #include "valdi/runtime/Attributes/ValueConverters.hpp"
 #include "valdi/runtime/Attributes/Yoga/Yoga.hpp"
 #include "valdi/runtime/Context/ViewNodeTree.hpp"
+#include "valdi/runtime/ValdiBuildFlags.hpp"
 #include "valdi_core/cpp/Constants.hpp"
 
 #include "valdi/runtime/Attributes/AttributeOwner.hpp"
@@ -18,6 +19,7 @@
 #include "valdi/runtime/CSS/CSSDocument.hpp"
 
 #include "valdi/runtime/Rendering/RenderRequest.hpp"
+#include "valdi/runtime/Rendering/RenderRequestEntries.hpp"
 #include "valdi/runtime/Rendering/ViewNodeRenderer.hpp"
 
 #include "valdi/runtime/Resources/AssetCatalog.hpp"
@@ -51,10 +53,59 @@
 #include "utils/time/StopWatch.hpp"
 #include <algorithm>
 #include <fmt/format.h>
+#include <set>
 #include <vector>
 #include <yoga/YGNode.h>
 
 namespace Valdi {
+
+namespace {
+
+#if VALDI_DEBUG_TREE_UPDATES
+constexpr size_t kMaxAttributeNamesInTrace = 12;
+constexpr size_t kMaxTraceTriggerAttributeLength = 96;
+
+std::string getRenderRequestAttributeNamesTrigger(const RenderRequest& request, const AttributeIds& attributeIds) {
+    std::set<std::string> names;
+    struct Visitor {
+        const AttributeIds& ids;
+        std::set<std::string>& out;
+        void visit(RenderRequestEntries::EntryBase& entry) {
+            if (entry.getType() == RenderRequestEntryType::SetElementAttribute) {
+                auto& setAttr = static_cast<RenderRequestEntries::SetElementAttribute&>(entry);
+                out.insert(ids.getNameForId(setAttr.getAttributeId()).slowToString());
+            }
+        }
+    } visitor{attributeIds, names};
+    request.visitEntries(visitor);
+
+    if (names.empty()) {
+        return "render_request";
+    }
+    std::string trigger = "render_request|";
+    size_t count = 0;
+    size_t length = trigger.size();
+    for (const auto& name : names) {
+        if (count >= kMaxAttributeNamesInTrace ||
+            (length + name.size() + (count ? 1 : 0) > kMaxTraceTriggerAttributeLength)) {
+            if (count > 0) {
+                trigger += ",...";
+            }
+            break;
+        }
+        if (count != 0) {
+            trigger += ",";
+            length += 1;
+        }
+        trigger += name;
+        length += name.size();
+        ++count;
+    }
+    return trigger;
+}
+#endif
+
+} // namespace
 
 constexpr bool kTCPSocketEnabled = (snap::kIsGoldBuild || snap::kIsDevBuild);
 
@@ -306,14 +357,30 @@ void appendAllViews(ViewNode* viewNode, std::vector<Ref<View>>& views) {
 void Runtime::destroyViewNodeTree(ViewNodeTree& viewNodeTree) {
     _viewNodeManager.removeViewNodeTree(viewNodeTree);
 
-    viewNodeTree.scheduleExclusiveUpdate([&]() {
-        auto rootViewNode = viewNodeTree.getRootViewNode();
-        if (rootViewNode != nullptr) {
-            viewNodeTree.removeViewNode(rootViewNode->getRawId());
-        }
+#if VALDI_DEBUG_TREE_UPDATES
+    viewNodeTree.scheduleExclusiveUpdate(
+        [&]() {
+            auto rootViewNode = viewNodeTree.getRootViewNode();
+            if (rootViewNode != nullptr) {
+                viewNodeTree.removeViewNode(rootViewNode->getRawId());
+            }
 
-        viewNodeTree.clear();
-    });
+            viewNodeTree.clear();
+        },
+        DispatchFunction(),
+        "destroy");
+#else
+    viewNodeTree.scheduleExclusiveUpdate(
+        [&]() {
+            auto rootViewNode = viewNodeTree.getRootViewNode();
+            if (rootViewNode != nullptr) {
+                viewNodeTree.removeViewNode(rootViewNode->getRawId());
+            }
+
+            viewNodeTree.clear();
+        },
+        DispatchFunction());
+#endif
 }
 
 void Runtime::updateAttributeState(ViewNode& viewNode, const StringBox& attributeName, const Value& attributeValue) {
@@ -562,9 +629,41 @@ void Runtime::processRenderRequest(const Ref<RenderRequest>& rawRenderRequest) {
         return;
     }
 
+#if VALDI_DEBUG_TREE_UPDATES
+    std::string renderTrigger = getRenderRequestAttributeNamesTrigger(*rawRenderRequest, _attributeIds);
     viewNodeTree->scheduleExclusiveUpdate(
         [=]() {
-            VALDI_TRACE("Valdi.processRenderRequest");
+            VALDI_TRACE_META("Valdi.processRenderRequest", std::to_string(rawRenderRequest->getEntriesSize()));
+
+            ViewNodeRenderer renderer(*viewNodeTree, viewNodeTree->getContext()->getLogger(), _limitToViewportDisabled);
+
+            renderer.render(*rawRenderRequest);
+
+            if (Valdi::traceRenderingPerformance) {
+                VALDI_INFO(
+                    *_logger, "Finished rendering {} in {}", viewNodeTree->getContext()->getPath(), sw.elapsed());
+            }
+
+            if (rawRenderRequest->getEntriesSize() >= Valdi::kEmitProcessRequestLatencyEntriesThreshold) {
+                const auto& metrics = getMetrics();
+                if (metrics != nullptr) {
+                    metrics->emitProcessRequestLatency(viewNodeTree->getContext()->getPath().getResourceId().bundleName,
+                                                       sw.elapsed());
+                }
+            }
+
+            viewNodeTree->getContext()->onRendered();
+        },
+        [=]() {
+            if (_listener != nullptr) {
+                _listener->onContextRendered(*this, viewNodeTree->getContext());
+            }
+        },
+        std::move(renderTrigger));
+#else
+    viewNodeTree->scheduleExclusiveUpdate(
+        [=]() {
+            VALDI_TRACE_META("Valdi.processRenderRequest", std::to_string(rawRenderRequest->getEntriesSize()));
 
             ViewNodeRenderer renderer(*viewNodeTree, viewNodeTree->getContext()->getLogger(), _limitToViewportDisabled);
 
@@ -590,6 +689,7 @@ void Runtime::processRenderRequest(const Ref<RenderRequest>& rawRenderRequest) {
                 _listener->onContextRendered(*this, viewNodeTree->getContext());
             }
         });
+#endif
 }
 
 void Runtime::receivedCallActionMessage(const ContextId& contextId,

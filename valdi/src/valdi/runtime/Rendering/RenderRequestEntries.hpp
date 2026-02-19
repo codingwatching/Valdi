@@ -5,6 +5,8 @@
 //  Created by Simon Corsin on 4/21/21.
 //
 
+#pragma once
+
 #include "valdi/runtime/Attributes/AttributeIds.hpp"
 #include "valdi/runtime/Context/RawViewNodeId.hpp"
 #include "valdi/runtime/Rendering/AnimationOptions.hpp"
