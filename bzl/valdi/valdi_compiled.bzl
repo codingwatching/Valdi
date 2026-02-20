@@ -82,6 +82,10 @@ ValdiModuleInfo = provider(
         "ios_release_generated_srcs": "A tree artifact containing all the generated objective-c/swift code",
         "ios_release_api_generated_hdrs": "Will contain the generated Objective-C API header file, only if single_file_codegen is enabled",
         "ios_release_api_generated_srcs": "A tree artifact containing all the generated objective-c/swift code (for the API-only module)",
+        "ios_debug_generated_swift_srcs": "The generated Swift source file for single_file_codegen modules with Swift output",
+        "ios_release_generated_swift_srcs": "The generated Swift source file for single_file_codegen modules with Swift output",
+        "ios_debug_api_generated_swift_srcs": "The generated Swift API source file for single_file_codegen modules with Swift output",
+        "ios_release_api_generated_swift_srcs": "The generated Swift API source file for single_file_codegen modules with Swift output",
         "ios_debug_nativesrc": "generated .c file containing all the generated C code",
         "ios_release_nativesrc": "generated .c file containing all the generated C code",
         "cpp_srcs": "generated .cpp files containing all the generated C++ code",
@@ -286,6 +290,10 @@ valdi_compiled = rule(
         "single_file_codegen": attr.bool(
             doc = "Whether codegen should occur in a single file or one file per type",
             default = True,
+        ),
+        "ios_language": attr.string_list(
+            doc = "The languages for iOS output (e.g., ['objc'] or ['objc', 'swift'])",
+            default = ["objc"],
         ),
         "disable_code_coverage": attr.bool(
             doc = "Disable code-coverage reporting for this module",
@@ -613,8 +621,8 @@ def _get_files_output_paths(ctx, module_name, module_directory, localization_mod
         if ctx.attr.has_android_exports:
             outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_generated_src(module_name))
         if ctx.attr.has_ios_exports:
-            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_src(ctx.attr.ios_module_name))
-            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_api_src(ctx.attr.ios_module_name))
+            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_src(ctx.attr.ios_module_name, ctx.attr.ios_language))
+            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_api_src(ctx.attr.ios_module_name, ctx.attr.ios_language))
 
         # C++ always outputs to release configuration
         # However, when code coverage is enabled (--output-target debug), C++ outputs are not generated
@@ -860,7 +868,7 @@ def _get_ios_generated_api_src_dir(ios_module_name):
 def _get_ios_generated_src_helper(output_target, ios_module_name, suffix, ext):
     return base_relative_dir("ios", output_target, paths.join(_IOS_GENERATED_SRC_DIR, ios_module_name + suffix, "{}.{}".format(ios_module_name + suffix, ext)))
 
-def _get_ios_generated_src(ios_module_name):
+def _get_ios_generated_src(ios_module_name, ios_language = ["objc"]):
     debug_srcs = [
         _get_ios_generated_src_helper("debug", ios_module_name, "", "h"),
         _get_ios_generated_src_helper("debug", ios_module_name, "", "m"),
@@ -871,9 +879,13 @@ def _get_ios_generated_src(ios_module_name):
         _get_ios_generated_src_helper("release", ios_module_name, "", "m"),
     ]
 
+    if "swift" in ios_language:
+        debug_srcs.append(_get_ios_generated_src_helper("debug", ios_module_name, "", "swift"))
+        release_srcs.append(_get_ios_generated_src_helper("release", ios_module_name, "", "swift"))
+
     return [debug_srcs, release_srcs]
 
-def _get_ios_generated_api_src(ios_module_name):
+def _get_ios_generated_api_src(ios_module_name, ios_language = ["objc"]):
     debug_srcs = [
         _get_ios_generated_src_helper("debug", ios_module_name, IOS_API_NAME_SUFFIX, "h"),
         _get_ios_generated_src_helper("debug", ios_module_name, IOS_API_NAME_SUFFIX, "m"),
@@ -883,6 +895,10 @@ def _get_ios_generated_api_src(ios_module_name):
         _get_ios_generated_src_helper("release", ios_module_name, IOS_API_NAME_SUFFIX, "h"),
         _get_ios_generated_src_helper("release", ios_module_name, IOS_API_NAME_SUFFIX, "m"),
     ]
+
+    if "swift" in ios_language:
+        debug_srcs.append(_get_ios_generated_src_helper("debug", ios_module_name, IOS_API_NAME_SUFFIX, "swift"))
+        release_srcs.append(_get_ios_generated_src_helper("release", ios_module_name, IOS_API_NAME_SUFFIX, "swift"))
 
     return [debug_srcs, release_srcs]
 
@@ -1270,12 +1286,15 @@ def _generate_module_definition(ctx, name):
     android_output_target = "debug" if code_coverage else attr.android_output_target
     ios_output_target = "debug" if code_coverage else attr.ios_output_target
 
+    ios_language_str = ",".join(attr.ios_language)
+
     module_def = """
 name: {name}
 
 ios:
   output_target: {ios_output_target}
   module_name: {ios_module_name}
+  language: {ios_language}
 
 android:
   output_target: {android_output_target}
@@ -1304,6 +1323,7 @@ compilation_mode: {compilation_mode}
         name = name,
         ios_output_target = ios_output_target,
         ios_module_name = attr.ios_module_name,
+        ios_language = ios_language_str,
         android_output_target = android_output_target,
         android_export_strings = "true" if attr.android_export_strings else "false",
         compilation_mode = attr.compilation_mode,
@@ -1399,13 +1419,17 @@ def _create_valdi_module_info(ctx, module_name, module_yaml, module_definition, 
         ios_debug_bundle_resources = depset(_extract_ios_resource_bundles(module_name, "debug", outputs)),
         ios_release_bundle_resources = depset(_extract_ios_resource_bundles(module_name, "release", outputs)),
         ios_debug_generated_hdrs = _extract_ios_generated_hdrs("debug", outputs, ios_module_name) if single_file_codegen and ctx.attr.has_ios_exports else None,
-        ios_debug_generated_srcs = _extract_ios_generated_srcs("debug", outputs, ios_module_name, single_file_codegen) if ctx.attr.has_ios_exports else None,
+        ios_debug_generated_srcs = _extract_ios_generated_srcs("debug", outputs, ios_module_name, single_file_codegen, ctx.attr.ios_language) if ctx.attr.has_ios_exports else None,
         ios_release_generated_hdrs = _extract_ios_generated_hdrs("release", outputs, ios_module_name) if single_file_codegen and ctx.attr.has_ios_exports else None,
-        ios_release_generated_srcs = _extract_ios_generated_srcs("release", outputs, ios_module_name, single_file_codegen) if ctx.attr.has_ios_exports else None,
+        ios_release_generated_srcs = _extract_ios_generated_srcs("release", outputs, ios_module_name, single_file_codegen, ctx.attr.ios_language) if ctx.attr.has_ios_exports else None,
         ios_debug_api_generated_hdrs = _extract_ios_api_generated_hdrs("debug", outputs, ios_module_name) if single_file_codegen and ctx.attr.has_ios_exports else None,
-        ios_debug_api_generated_srcs = _extract_ios_api_generated_srcs("debug", outputs, ios_module_name, single_file_codegen) if ctx.attr.has_ios_exports else None,
+        ios_debug_api_generated_srcs = _extract_ios_api_generated_srcs("debug", outputs, ios_module_name, single_file_codegen, ctx.attr.ios_language) if ctx.attr.has_ios_exports else None,
         ios_release_api_generated_hdrs = _extract_ios_api_generated_hdrs("release", outputs, ios_module_name) if single_file_codegen and ctx.attr.has_ios_exports else None,
-        ios_release_api_generated_srcs = _extract_ios_api_generated_srcs("release", outputs, ios_module_name, single_file_codegen) if ctx.attr.has_ios_exports else None,
+        ios_release_api_generated_srcs = _extract_ios_api_generated_srcs("release", outputs, ios_module_name, single_file_codegen, ctx.attr.ios_language) if ctx.attr.has_ios_exports else None,
+        ios_debug_generated_swift_srcs = _extract_ios_generated_swift_srcs("debug", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports else None,
+        ios_release_generated_swift_srcs = _extract_ios_generated_swift_srcs("release", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports else None,
+        ios_debug_api_generated_swift_srcs = _extract_ios_api_generated_swift_srcs("debug", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports else None,
+        ios_release_api_generated_swift_srcs = _extract_ios_api_generated_swift_srcs("release", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports else None,
         ios_debug_nativesrc = _extract_ios_native_srcs("debug", ios_module_name, module_name, outputs) if ctx.attr.has_ios_exports else None,
         ios_release_nativesrc = _extract_ios_native_srcs("release", ios_module_name, module_name, outputs) if is_ios_release and ctx.attr.has_ios_exports else None,
         ios_debug_sourcemaps = _extract_ios_debug_sourcemaps(module_name, outputs) if has_valdimodule and not code_coverage else None,
@@ -1606,9 +1630,9 @@ def _extract_ios_api_generated_hdrs(output_target, outputs, ios_module_name):
 
     return _filter_ios_src(outputs, output_target, debug_src, release_src, ".h")
 
-def _extract_ios_generated_srcs(output_target, outputs, ios_module_name, single_file_codegen):
+def _extract_ios_generated_srcs(output_target, outputs, ios_module_name, single_file_codegen, ios_language = ["objc"]):
     if single_file_codegen:
-        debug_src, release_src = _get_ios_generated_src(ios_module_name)
+        debug_src, release_src = _get_ios_generated_src(ios_module_name, ios_language)
 
         return _filter_ios_src(outputs, output_target, debug_src, release_src, ".m")
     else:
@@ -1621,9 +1645,15 @@ def _extract_ios_generated_srcs(output_target, outputs, ios_module_name, single_
 
         return found[0] if found else None
 
-def _extract_ios_api_generated_srcs(output_target, outputs, ios_module_name, single_file_codegen):
+def _extract_ios_generated_swift_srcs(output_target, outputs, ios_module_name, ios_language = ["objc"]):
+    if "swift" not in ios_language:
+        return None
+    debug_src, release_src = _get_ios_generated_src(ios_module_name, ios_language)
+    return _filter_ios_src(outputs, output_target, debug_src, release_src, ".swift")
+
+def _extract_ios_api_generated_srcs(output_target, outputs, ios_module_name, single_file_codegen, ios_language = ["objc"]):
     if single_file_codegen:
-        debug_api_src, release_api_src = _get_ios_generated_api_src(ios_module_name)
+        debug_api_src, release_api_src = _get_ios_generated_api_src(ios_module_name, ios_language)
 
         return _filter_ios_src(outputs, output_target, debug_api_src, release_api_src, ".m")
     else:
@@ -1634,6 +1664,12 @@ def _extract_ios_api_generated_srcs(output_target, outputs, ios_module_name, sin
         else:
             found = [f for f in outputs if f.is_directory and f.path.endswith(release_api_src_dir)]
         return found[0] if found else None
+
+def _extract_ios_api_generated_swift_srcs(output_target, outputs, ios_module_name, ios_language = ["objc"]):
+    if "swift" not in ios_language:
+        return None
+    debug_api_src, release_api_src = _get_ios_generated_api_src(ios_module_name, ios_language)
+    return _filter_ios_src(outputs, output_target, debug_api_src, release_api_src, ".swift")
 
 def _extract_cpp_generated_srcs(outputs, module_name, single_file_codegen):
     """Extract C++ generated source files (.cpp) from outputs.

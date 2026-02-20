@@ -200,6 +200,7 @@ def valdi_module(
         strings_dir = strings_dir,
         android_class_path = android_class_path,
         single_file_codegen = single_file_codegen,
+        ios_language = ios_language if type(ios_language) == "list" else [ios_language],
         disable_code_coverage = disable_code_coverage,
         disable_dependency_verification = disable_dependency_verification,
         disable_hotreload = disable_hotreload,
@@ -561,9 +562,33 @@ def _setup_ios_target(name, module_deps, ios_deps, compiled_module_target, ios_m
         swift_srcs = []
 
         if "swift" in ios_language:
+            extract_valdi_module_native_output(
+                name = "ios.debug.swift_srcs",
+                compiled_module = compiled_module_target,
+                output_name = "ios_debug_generated_swift_srcs",
+            )
+
+            extract_valdi_module_native_output(
+                name = "ios.release.swift_srcs",
+                compiled_module = compiled_module_target,
+                output_name = "ios_release_generated_swift_srcs",
+            )
+
+            extract_valdi_module_native_output(
+                name = "ios.debug.api.swift_srcs",
+                compiled_module = compiled_module_target,
+                output_name = "ios_debug_api_generated_swift_srcs",
+            )
+
+            extract_valdi_module_native_output(
+                name = "ios.release.api.swift_srcs",
+                compiled_module = compiled_module_target,
+                output_name = "ios_release_api_generated_swift_srcs",
+            )
+
             swift_srcs = source_set_select(
-                debug = [":ios.debug.srcs"],
-                release = [":ios.release.srcs"],
+                debug = [":ios.debug.swift_srcs", ":ios.debug.api.swift_srcs"],
+                release = [":ios.release.swift_srcs", ":ios.release.api.swift_srcs"],
             )
         else:
             swift_srcs = ["@valdi//bzl/valdi:empty.swift"]
