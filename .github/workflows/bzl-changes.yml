@@ -92,21 +92,13 @@ jobs:
       
       - name: Free disk space
         run: |
-          # Free disk space first to avoid "No space left on device" during Bazel/Android builds.
-          # Ubuntu runners have limited space; we need room for Java, Android SDK, NDK, and Bazel cache.
-          echo "Disk usage before cleanup:"
-          df -h
+          # Free space before heavy installs to avoid "No space left on device" during build
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /opt/ghc
           sudo rm -rf /opt/hostedtoolcache/CodeQL
           sudo rm -rf /usr/local/share/boost
-          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/pip
           sudo apt-get clean
-          sudo rm -rf /var/lib/apt/lists/*
-          if command -v docker >/dev/null 2>&1; then
-            sudo docker system prune -af 2>/dev/null || true
-          fi
-          echo "Disk usage after cleanup:"
           df -h
       
       - name: Mount Bazel cache
@@ -129,7 +121,17 @@ jobs:
           java-version: '17'
       
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        run: |
+          # Install to a writable path (android-actions/setup-android@v3 uses /usr/local/lib/android which fails with EACCES on hosted runners)
+          export ANDROID_HOME=$HOME/Android/Sdk
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -sS -o /tmp/cmdline-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip"
+          unzip -q -o /tmp/cmdline-tools.zip -d "$ANDROID_HOME/cmdline-tools"
+          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          rm /tmp/cmdline-tools.zip
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
       
       - name: Install Android SDK components and set NDK path
         run: |
@@ -138,10 +140,6 @@ jobs:
           sdkmanager "platforms;android-36"
           sdkmanager "build-tools;34.0.0"
           sdkmanager "ndk;23.0.7599858"
-          
-          # Set Android environment variables
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/23.0.7599858" >> $GITHUB_ENV
       
       - name: Setup Bazel
@@ -154,9 +152,10 @@ jobs:
       
       - name: Configure Bazel cache
         run: |
-          echo "build --disk_cache=$HOME/.cache/bazel" >> .bazelrc.local
+          # Use same paths as actions/cache so build outputs are saved and restored between runs
+          echo "build --disk_cache=$HOME/.cache/bazel/disk" >> .bazelrc.local
           echo "build --repository_cache=$HOME/.cache/bazel/repo" >> .bazelrc.local
-          echo "Bazel cache configured at: $HOME/.cache/bazel"
+          echo "Bazel cache configured (disk + repo); actions/cache will persist both"
       
       - name: Install system dependencies
         run: |
