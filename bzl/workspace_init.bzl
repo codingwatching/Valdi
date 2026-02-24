@@ -1,4 +1,3 @@
-load("@android_macros//:android.bzl", "STARLARK_RULES_ANDROID_ENABLED")
 load("@aspect_rules_esbuild//esbuild:repositories.bzl", "LATEST_ESBUILD_VERSION", "esbuild_register_toolchains")
 load("@aspect_rules_ts//ts:repositories.bzl", "rules_ts_dependencies")
 load("@bazel_features//:deps.bzl", "bazel_features_deps")
@@ -122,7 +121,7 @@ def _register_android_deps():
             "https://repo1.maven.org/maven2",
             "https://maven.google.com",
         ],
-        use_starlark_android_rules = STARLARK_RULES_ANDROID_ENABLED,
+        use_starlark_android_rules = True,
         # Let's force the pinned version:
         # https://github.com/bazelbuild/rules_jvm_external#resolving-user-specified-and-transitive-dependency-version-conflicts
         version_conflict_policy = "pinned",

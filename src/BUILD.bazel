@@ -1,4 +1,4 @@
-load("@android_macros//:android.bzl", "android_library")
+load("@rules_android//rules:rules.bzl", "android_library")
 
 # Note don't add any c++ deps to this target as it doesn't work
 # Add C++ deps to the package_aar rule below
