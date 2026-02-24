@@ -110,4 +110,9 @@ bool ValdiRuntimeTweaks::enableScopedContextStackTraceCapture() const {
     return _tweakValueProvider->getBool(kKey, false);
 }
 
+bool ValdiRuntimeTweaks::disableJsLogging() const {
+    auto configKey = StringCache::getGlobal().makeStringFromLiteral(std::string_view("VALDI_DISABLE_JS_LOGGING"));
+    return _tweakValueProvider->getBool(configKey, false);
+}
+
 } // namespace Valdi

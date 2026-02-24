@@ -32,6 +32,7 @@ public:
     bool disablePersistentStoreEncryption() const;
     bool skipProtoIndex() const;
     bool enableScopedContextStackTraceCapture() const;
+    bool disableJsLogging() const;
 
 private:
     Shared<ITweakValueProvider> _tweakValueProvider;
