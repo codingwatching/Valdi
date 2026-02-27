@@ -223,21 +223,12 @@ class ValdiRuntime(
         }
     }
 
-    private val jsThreadMarker = ThreadLocal.withInitial { false }
-
     inline fun runOnJsThread(crossinline callback: () -> Unit) {
         runOnJsThread(Runnable { callback() })
     }
 
     override fun runOnJsThread(runnable: Runnable) {
-        native.callOnJsThread(false, Runnable {
-            jsThreadMarker.set(true)
-            try {
-                runnable.run()
-            } finally {
-                jsThreadMarker.set(false)
-            }
-        })
+        native.callOnJsThread(false, runnable)
     }
 
     override fun registerNativeModuleFactory(moduleFactory: ModuleFactory) {

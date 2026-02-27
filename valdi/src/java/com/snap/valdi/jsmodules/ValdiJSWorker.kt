@@ -6,7 +6,6 @@ import com.snapchat.client.valdi_core.JSRuntime
 
 // User code should not create workers directly, instead, use ValdiRuntimeManager.getWorker() to acquire a worker
 class ValdiJSWorker(val jsRuntime: JSRuntime) : ValdiJSRuntime {
-    private val jsThreadMarker = ThreadLocal.withInitial { false }
 
     override fun pushModuleToMarshaller(modulePath: String, marshaller: ValdiMarshaller): Int {
         val objectIndex = jsRuntime.pushModuleToMarshaller(null/*jsRuntime.createNativeObjectsManager()?*/, modulePath, marshaller.nativeHandle)
@@ -30,12 +29,7 @@ class ValdiJSWorker(val jsRuntime: JSRuntime) : ValdiJSRuntime {
     override fun runOnJsThread(runnable: Runnable) {
         jsRuntime.runOnJsThread(object: ValdiFunction {
             override fun perform(marshaller: ValdiMarshaller): Boolean {
-                jsThreadMarker.set(true)
-                try {
-                    runnable.run()
-                } finally {
-                    jsThreadMarker.set(false)
-                }
+                runnable.run()
                 return false
             }
         });
