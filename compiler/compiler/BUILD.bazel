@@ -1,0 +1,16 @@
+load("@bazel_skylib//rules:native_binary.bzl", "native_binary")
+
+# Local Valdi compiler binary for use with --//bzl/valdi:use_local_compiler=true.
+# Build the compiler with: scripts/update_compiler.sh -o out
+# That produces out/macos/valdi_compiler or out/linux/valdi_compiler; this
+# makes that binary usable as the toolchain compiler without the sh_binary
+# runfiles complexity.
+native_binary(
+    name = "local_valdi_compiler",
+    src = select({
+        "@bazel_tools//src/conditions:darwin": "out/macos/valdi_compiler",
+        "@bazel_tools//src/conditions:linux_x86_64": "out/linux/valdi_compiler",
+    }),
+    out = "local_valdi_compiler",
+    visibility = ["//visibility:public"],
+)

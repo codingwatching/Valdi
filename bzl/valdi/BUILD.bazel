@@ -251,6 +251,22 @@ config_setting(
     },
 )
 
+# Flag to use a locally built compiler binary instead of the prebuilt from the toolchain.
+# Build the compiler with: compiler/compiler/scripts/update_compiler.sh -o compiler/compiler/out
+# Then build with: --//bzl/valdi:use_local_compiler=true
+bool_flag(
+    name = "use_local_compiler",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "use_local_compiler_enabled",
+    flag_values = {
+        ":use_local_compiler": "true",
+    },
+)
+
 # Alias to choose between prebuilt binary and source-built companion
 alias(
     name = "compiler_companion_source",
@@ -261,10 +277,20 @@ alias(
     visibility = ["//visibility:public"],
 )
 
+# Compiler: prebuilt from toolchain or local binary (see use_local_compiler)
+alias(
+    name = "compiler_source",
+    actual = select({
+        ":use_local_compiler_enabled": "//src/open_source/compiler/compiler:local_valdi_compiler",
+        "//conditions:default": "@valdi_toolchain//:valdi_compiler",
+    }),
+    visibility = ["//visibility:private"],
+)
+
 # Platform-specific rule definition, for macos
 valdi_toolchain(
     name = "valdi",
-    compiler = "@valdi_toolchain//:valdi_compiler",
+    compiler = ":compiler_source",
     compiler_companion = ":compiler_companion_source",
     compiler_toolbox = "@valdi_toolchain//:valdi_compiler_toolbox",
     pngquant = "@valdi_toolchain//:pngquant",
