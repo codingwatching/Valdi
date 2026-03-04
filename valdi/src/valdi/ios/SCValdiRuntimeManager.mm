@@ -309,7 +309,9 @@ static void updateRuntimeManagersArray(void (^callback)(NSMutableArray<NSValue *
 
     _referenceTrackingEnabled = configuration.enableReferenceTracking;
     BOOL useScreenUserInterfaceStyleForDarkMode = !configuration.useViewControllerBasedUserInterfaceStyleForDarkMode;
-    [_mainRuntime setAllowDarkMode:configuration.allowDarkMode useScreenUserInterfaceStyleForDarkMode:useScreenUserInterfaceStyleForDarkMode];
+    [_mainRuntime setAllowDarkMode:configuration.allowDarkMode
+        useScreenUserInterfaceStyleForDarkMode:useScreenUserInterfaceStyleForDarkMode
+              useNewStatusBarInsetCalculation:configuration.useNewStatusBarInsetCalculation];
     [_mainRuntime setIsIntegrationTestEnvironment:configuration.isTestEnvironment];
     _mainRuntime.disableLegacyMeasureBehaviorByDefault = configuration.disableLegacyMeasureBehaviorByDefault;
     [_mainRuntime setPerformHapticFeedbackFunctionBlock:configuration.performHapticFeedbackBlock];

@@ -365,9 +365,13 @@
     [_applicationModule setIsIntegrationTestEnvironment:isIntegrationTestEnvironment];
 }
 
-- (void)setAllowDarkMode:(BOOL)allowDarkMode useScreenUserInterfaceStyleForDarkMode:(BOOL)useScreenUserInterfaceStyleForDarkMode
+- (void)setAllowDarkMode:(BOOL)allowDarkMode
+    useScreenUserInterfaceStyleForDarkMode:(BOOL)useScreenUserInterfaceStyleForDarkMode
+          useNewStatusBarInsetCalculation:(BOOL)useNewStatusBarInsetCalculation
 {
-    [_deviceModule setAllowDarkMode:allowDarkMode useScreenUserInterfaceStyleForDarkMode:useScreenUserInterfaceStyleForDarkMode];
+    [_deviceModule setAllowDarkMode:allowDarkMode
+        useScreenUserInterfaceStyleForDarkMode:useScreenUserInterfaceStyleForDarkMode
+              useNewStatusBarInsetCalculation:useNewStatusBarInsetCalculation];
 }
 
 #pragma mark - Asset factories

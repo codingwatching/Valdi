@@ -38,6 +38,9 @@ typedef void (^SCValdiPerformHapticFeedbackBlock)(NSString* type);
 // Use the root containing view controller's userInterfaceStyle instead of getting it from UIScreen.mainScreen
 @property (assign, nonatomic) BOOL useViewControllerBasedUserInterfaceStyleForDarkMode;
 
+// Enables scene/window-aware status bar inset calculation for displayTopInset propagation.
+@property (assign, nonatomic) BOOL useNewStatusBarInsetCalculation;
+
 @property (assign, nonatomic) BOOL disableLegacyMeasureBehaviorByDefault;
 
 /**

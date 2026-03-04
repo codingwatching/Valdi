@@ -42,7 +42,8 @@ typedef void (*SCValdiLoggerOutputFunction)(NSString* str);
 - (NSArray<SCValdiContext*>*)getAllContexts;
 
 - (void)setAllowDarkMode:(BOOL)allowDarkMode
-    useScreenUserInterfaceStyleForDarkMode:(BOOL)useScreenUserInterfaceStyleForDarkMode;
+    useScreenUserInterfaceStyleForDarkMode:(BOOL)useScreenUserInterfaceStyleForDarkMode
+          useNewStatusBarInsetCalculation:(BOOL)useNewStatusBarInsetCalculation;
 
 - (void)setIsIntegrationTestEnvironment:(BOOL)isIntegrationTestEnvironment;
 
