@@ -33,6 +33,8 @@ import com.snapchat.client.valdi.utils.NativeHandleWrapper
 
 object ViewUtils {
 
+    var enableTextAlignmentForRTL: Boolean = true
+
     private fun getOptionalValdiObjects(view: View): ValdiObjects? {
         return view.tag as? ValdiObjects
     }
@@ -377,6 +379,33 @@ object ViewUtils {
 
     fun setIsRightToLeft(view: View, isRightToLeft: Boolean) {
         getOrCreateValdiObjects(view).isRightToLeft = isRightToLeft
+
+        if (!enableTextAlignmentForRTL) {
+            return;
+        }
+
+        // Skip ValdiRootView as its layout direction is controlled by the application.
+        if (view is ValdiRootView) {
+            return
+        }
+
+        // Set the native Android layout direction on TextViews so text alignment respects
+        // the Valdi-computed direction. We only need this on views that render text, since
+        // Yoga already handles the layout positioning for all views.
+        // 
+        // TextView is the base class for EditText, AppCompatEditText, AppCompatTextView, etc.
+        if (view is android.widget.TextView) {
+            val targetDirection = if (isRightToLeft) {
+                View.LAYOUT_DIRECTION_RTL
+            } else {
+                View.LAYOUT_DIRECTION_LTR
+            }
+            
+            // Only set if changed to avoid potential invalidation overhead
+            if (view.layoutDirection != targetDirection) {
+                view.layoutDirection = targetDirection
+            }
+        }
     }
 
     /**

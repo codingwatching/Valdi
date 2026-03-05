@@ -40,6 +40,7 @@ import com.snap.valdi.context.ContextManager
 import com.snap.valdi.drawables.BoxShadowRendererPool
 import com.snap.valdi.exceptions.GlobalExceptionHandler
 import com.snap.valdi.exceptions.HostUncaughtExceptionHandler
+import com.snap.valdi.extensions.ViewUtils
 import com.snap.valdi.imageloading.ValdiImageLoaderPostprocessor
 import com.snap.valdi.imageloading.DefaultValdiImageLoader
 import com.snap.valdi.jsmodules.ValdiStringsModule
@@ -207,6 +208,7 @@ class ValdiRuntimeManager(context: Context,
             NativeHandlesManager.start()
         }
         ValdiLeakTracker.enabled = tweaks?.enableLeakTracker == true
+        ViewUtils.enableTextAlignmentForRTL = tweaks?.enableTextAlignmentForRTL ?: true
 
         viewManager = ValdiViewManager(context, logger,
             tweaks?.disableAnimations ?: false, viewRefSupport,
