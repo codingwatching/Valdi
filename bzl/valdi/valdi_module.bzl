@@ -1086,8 +1086,10 @@ def _exported_objc_lib(name, ios_module_name, objc_hdrs, objc_srcs, single_file_
         enable_swift_interop = True,
         module_name = ios_module_name,
         copts = COMPILER_FLAGS + hmap_copts,
-        sdk_frameworks = [
-            "UIKit",
+        sdk_frameworks = select({
+            "@snap_platforms//conditions:macos": ["AppKit"],
+            "//conditions:default": ["UIKit"],
+        }) + [
             "JavaScriptCore",
             "QuartzCore",
             "CoreGraphics",

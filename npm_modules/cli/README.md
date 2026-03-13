@@ -114,8 +114,10 @@ my_application/          # Root directory of your application
 └── modules/
     ├── module_a/
     │   ├── BUILD.bazel
-    │   ├── android/     # Native Android sources
-    │   ├── ios/         # Native iOS sources
+    │   ├── android/     # Native Android sources (Kotlin)
+    │   ├── ios/         # Native iOS sources (Objective-C)
+    │   ├── macos/       # Native macOS sources (Objective-C)
+    │   ├── web/         # Web sources (TypeScript, compiled by tsc)
     │   ├── cpp/         # Native C++ sources
     │   └── src/         # Valdi sources
     │       └── ModuleAComponent.tsx
@@ -140,7 +142,7 @@ Options:
   --version      Show version number                       [boolean]
   --help         Show help                                 [boolean]
   --skip-checks  Skips confirmation prompts.               [boolean]
-  --template     Module template to use (skips the prompt). One of: ui_component, ios_android_bridge_module, cpp_bridge_module, ios_android_view_module  [string]
+  --template     Module template to use (skips the prompt). One of: ui_component, polyglot_bridge_module, polyglot_view_module  [string]
 ```
 
 ## For Contributors

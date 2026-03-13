@@ -1,5 +1,6 @@
-load("@valdi//bzl/valdi:valdi_module.bzl", "valdi_module")
+load("@aspect_rules_ts//ts:defs.bzl", "ts_project")
 load("@valdi//bzl/valdi:valdi_android_library.bzl", "valdi_android_library")
+load("@valdi//bzl/valdi:valdi_module.bzl", "valdi_module")
 
 valdi_android_library(
     name = "android_impl",
@@ -7,7 +8,7 @@ valdi_android_library(
         "android/**/*.kt",
     ]),
     deps = [
-        "@valdi//valdi:valdi_java",
+        ":{{MODULE_NAME}}_api_kt",
     ],
 )
 
@@ -21,8 +22,21 @@ objc_library(
     ]),
     copts = ["-I."],
     deps = [
-        "@valdi//valdi_core",
+        ":{{MODULE_NAME}}_api_objc",
     ],
+)
+
+ts_project(
+    name = "{{MODULE_NAME}}_web",
+    srcs = glob([
+        "web/**/*.ts",
+        "web/**/*.d.ts",
+    ]),
+    allow_js = True,
+    composite = False,
+    transpiler = "tsc",
+    tsconfig = "web/tsconfig.json",
+    visibility = ["//visibility:public"],
 )
 
 valdi_module(
@@ -35,7 +49,6 @@ valdi_module(
     ios_deps = [":ios_impl"],
     ios_module_name = "{{MODULE_NAME_PASCAL_CASED}}",
     visibility = ["//visibility:public"],
-    deps = [
-        "@valdi//src/valdi_modules/src/valdi/valdi_tsx",
-    ],
+    web_deps = [":{{MODULE_NAME}}_web"],
+    deps = [],
 )
