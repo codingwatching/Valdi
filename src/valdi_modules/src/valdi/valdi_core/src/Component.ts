@@ -69,7 +69,8 @@ export class Component<ViewModel = object, ComponentContext = object>
    */
   registerDisposable(disposable: ComponentDisposable): true
   registerDisposable(disposable: undefined): false
-  registerDisposable(disposable: ComponentDisposable | undefined): boolean  {
+  registerDisposable(disposable: ComponentDisposable | undefined): boolean
+  registerDisposable(disposable: ComponentDisposable | undefined): boolean {
     if (!disposable) {
       return false;
     }
