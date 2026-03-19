@@ -17,6 +17,7 @@ static void TestModuleInitFn(ValdiDesktopRuntimeHandle runtime) {
     g_initCallCount++;
 }
 
+static NSObject *g_returnedContextObject = nil;
 static void* g_returnedContext = nullptr;
 static void* TestContextProviderFn(ValdiDesktopRuntimeHandle runtime) {
     (void)runtime;
@@ -52,7 +53,8 @@ static void TestFilePickerCallbackNoHandler(void* context, void* result) {
 - (void)setUp {
     [super setUp];
     g_initCallCount = 0;
-    g_returnedContext = (void*)0xDEAD;
+    g_returnedContextObject = [NSObject new];
+    g_returnedContext = (__bridge void*)g_returnedContextObject;
     g_filePickerCallbackContext = nullptr;
     g_filePickerHandlerCalled = NO;
     g_filePickerCallbackInvokedWhenNoHandler = NO;
@@ -81,7 +83,7 @@ static void TestFilePickerCallbackNoHandler(void* context, void* result) {
 }
 
 - (void)testRequestHandler_noOpWhenHandlerNotSet {
-    ValdiDesktopInvokeRequest("filePicker", nullptr, TestFilePickerCallbackNoHandler);
+    ValdiDesktopInvokeRequest("filePickerNoHandler", nullptr, TestFilePickerCallbackNoHandler);
     XCTAssertFalse(g_filePickerCallbackInvokedWhenNoHandler, @"Callback should not be invoked when no handler set");
 }
 

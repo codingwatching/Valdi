@@ -281,7 +281,7 @@ alias(
 alias(
     name = "compiler_source",
     actual = select({
-        ":use_local_compiler_enabled": "//src/open_source/compiler/compiler:local_valdi_compiler",
+        ":use_local_compiler_enabled": "//compiler/compiler:local_valdi_compiler",
         "//conditions:default": "@valdi_toolchain//:valdi_compiler",
     }),
     visibility = ["//visibility:private"],

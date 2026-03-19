@@ -77,7 +77,17 @@ id NSObjectFromValue(const Valdi::Value &value) {
         case Valdi::ValueType::Bool:
             return @(value.toBool());
         case Valdi::ValueType::Map:
-        case Valdi::ValueType::Array:
+            return nil;
+        case Valdi::ValueType::Array: {
+            const Valdi::ValueArray* arr = value.getArray();
+            if (!arr) return nil;
+            NSMutableArray *result = [NSMutableArray arrayWithCapacity:arr->size()];
+            for (const Valdi::Value& element : *arr) {
+                id obj = NSObjectFromValue(element);
+                [result addObject:obj ?: [NSNull null]];
+            }
+            return result;
+        }
         case Valdi::ValueType::TypedArray:
             return nil;
         case Valdi::ValueType::Function: {
