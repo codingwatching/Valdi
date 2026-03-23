@@ -6121,6 +6121,30 @@ TEST_P(RuntimeFixture, supportsNativeModule) {
     ASSERT_EQ(50.0, result.value().toDouble());
 }
 
+// Verifies that a sync JS call from the main thread triggers the assertion when the module has
+// async_strict_mode and the function is not annotated with @AllowSyncCall. Uses a dedicated
+// test_async_strict module (async_strict_mode=True) so the main test module can stay non-strict.
+TEST_P(RuntimeFixture, AsyncStrictModeSyncCallAssertsOnMainThread) {
+    wrapper.flushQueues();
+
+    // test_async_strict has async_strict_mode=True; compute() has no @AllowSyncCall.
+    // Schema "f|b|():u" = bansync (`b`) so that CallSync triggers the assertion.
+    auto functionValue = getJsModulePropertyWithSchema(
+        wrapper.runtime, nullptr, nullptr, "test_async_strict/src/AsyncStrictModule", "compute", "f|b|():u");
+    ASSERT_TRUE(functionValue) << "getJsModulePropertyWithSchema failed: " << functionValue.description();
+
+    Valdi::SimpleExceptionTracker exceptionTracker;
+    auto valueFunction = functionValue.value().checkedTo<Ref<Valdi::ValueFunction>>(exceptionTracker);
+    ASSERT_TRUE(exceptionTracker) << "compute is not a function";
+
+    EXPECT_DEATH(
+        {
+            wrapper.runtime->getMainThreadManager().markCurrentThreadIsMainThread();
+            (void)valueFunction->call(Valdi::ValueFunctionFlagsCallSync, nullptr, 0);
+        },
+        "Sync JS call");
+}
+
 TEST_P(RuntimeFixture, supportsExportedFunction) {
     auto result = snap::valdi_modules::test::MakeCalculator::resolve(*wrapper.runtime->getJavaScriptRuntime(), nullptr);
     ASSERT_TRUE(result) << result.description();

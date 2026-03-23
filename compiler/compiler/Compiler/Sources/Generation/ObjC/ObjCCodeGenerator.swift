@@ -397,7 +397,7 @@ final class ObjCClassGenerator {
                 isVoid = true
                 cElementType = .void
             }
-        case .function(let parameters, let returnType, _, _):
+        case .function(let parameters, let returnType, _, _, _):
             let functionParser = try writeFunctionTypeParser(returnType: returnType,
                                                              parameters: parameters,
                                                              namePaths: namePaths,

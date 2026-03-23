@@ -39,7 +39,7 @@ final class SwiftFunctionGenerator {
 
         let nameAllocator = PropertyNameAllocator.forSwift()
 
-        let functionType : ValdiModelPropertyType = .function(parameters: exportedFunction.parameters, returnType: exportedFunction.returnType, isSingleCall: false, shouldCallOnWorkerThread: false)
+        let functionType : ValdiModelPropertyType = .function(parameters: exportedFunction.parameters, returnType: exportedFunction.returnType, isSingleCall: false, shouldCallOnWorkerThread: false, allowSyncCall: exportedFunction.allowSyncCall)
         let typeParser = try generator.getTypeParser(type: functionType, isOptional: false, functionHelperName: "callBlock", nameAllocator: nameAllocator)
         // let swiftProperties = 
 

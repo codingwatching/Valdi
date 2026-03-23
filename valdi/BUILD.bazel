@@ -677,7 +677,10 @@ objc_library(
     copts = ["-I."],
     includes = ["src"],
     module_name = "ValdiMacOSObjcTests",
-    sdk_frameworks = ["AppKit", "Foundation"],
+    sdk_frameworks = [
+        "AppKit",
+        "Foundation",
+    ],
     deps = [
         ":valdi_macos",
         ":valdi_macos_desktop_lib",
@@ -787,6 +790,7 @@ valdi_test(
         "//valdi/testdata/resources/modules/test:test_cpp",
         "//valdi/testdata/resources/modules/test:test_native",
         "//valdi/testdata/resources/modules/test2:test2_native",
+        "//valdi/testdata/resources/modules/test_async_strict:test_async_strict_native",
     ],
 )
 

@@ -172,6 +172,9 @@ final class ApplyTypeScriptAnnotationsProcessor: CompilationProcessor {
                 case .workerThread:
                     // WorkerThread annotations get processed inside TypeScriptNativeTypeExporter
                     break
+                case .allowSyncCall:
+                    // AllowSyncCall annotations get processed inside TypeScriptNativeTypeExporter
+                    break
                 case .untyped:
                     // Untyped annotations get processed inside TypeScriptNativeTypeExporter
                     break

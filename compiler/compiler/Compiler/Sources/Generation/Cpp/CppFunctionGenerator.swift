@@ -48,7 +48,7 @@ final class CppFunctionGenerator {
                                                                                                    typeArguments: nil))
 
         let property = ValdiModelProperty(name: exportedFunction.functionName,
-                                          type: .function(parameters: exportedFunction.parameters, returnType: exportedFunction.returnType, isSingleCall: false, shouldCallOnWorkerThread: false),
+                                          type: .function(parameters: exportedFunction.parameters, returnType: exportedFunction.returnType, isSingleCall: false, shouldCallOnWorkerThread: false, allowSyncCall: exportedFunction.allowSyncCall),
                                           comments: exportedFunction.comments,
                                           omitConstructor: nil,
                                           injectableParams: .empty)
@@ -60,7 +60,7 @@ final class CppFunctionGenerator {
 
         let schemaWriter = CppSchemaWriter(typeParameters: nil, generator: generator)
 
-        try schemaWriter.appendClass(cppType.declaration.name, properties: [property])
+        try schemaWriter.appendClass(cppType.declaration.name, properties: [property], asyncStrictMode: bundleInfo.asyncStrictMode)
 
         let allTypeArguments = ([returnTypeParser] + parameterTypeParsers).map { $0.typeNameResolver.resolve(self.cppType.declaration.namespace) }.joined(separator: ", ")
 

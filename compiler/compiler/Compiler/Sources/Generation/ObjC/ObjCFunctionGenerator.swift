@@ -90,7 +90,7 @@ final class ObjCFunctionGenerator {
 
         let objcProperty = ObjCProperty(propertyName: exportedFunction.functionName, modelProperty:
                                             ValdiModelProperty(name: exportedFunction.functionName,
-                                                                  type: .function(parameters: exportedFunction.parameters, returnType: exportedFunction.returnType, isSingleCall: false, shouldCallOnWorkerThread: false),
+                                                                  type: .function(parameters: exportedFunction.parameters, returnType: exportedFunction.returnType, isSingleCall: false, shouldCallOnWorkerThread: false, allowSyncCall: exportedFunction.allowSyncCall),
                                                                   comments: nil,
                                                                   omitConstructor: nil,
                                                                   injectableParams: .empty))

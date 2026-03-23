@@ -18,6 +18,8 @@
 #include "valdi_core/cpp/Utils/Trace.hpp"
 #include "valdi_core/cpp/Utils/Value.hpp"
 
+#include "utils/debugging/Assert.hpp"
+
 #include <future>
 
 namespace Valdi {
@@ -54,6 +56,10 @@ void ValueFunctionWithJSValue::setShouldBlockMainThread(bool shouldBlockMainThre
     _shouldBlockMainThread = shouldBlockMainThread;
 }
 
+void ValueFunctionWithJSValue::setAllowSyncCall(bool allowSyncCall) {
+    _allowSyncCall = allowSyncCall;
+}
+
 bool ValueFunctionWithJSValue::isSingleCall() const {
     return _isSingleCall;
 }
@@ -78,6 +84,13 @@ bool ValueFunctionWithJSValue::shouldCallSync(ValueFunctionFlags callFlags,
     }
 
     return (callFlags & ValueFunctionFlagsCallSync) != ValueFunctionFlagsNone || _shouldBlockMainThread;
+}
+
+bool ValueFunctionWithJSValue::isSyncCallAllowed(ValueFunctionFlags flags) const {
+    if ((flags & ValueFunctionFlagsCallSync) == ValueFunctionFlagsNone && !_shouldBlockMainThread) {
+        return true;
+    }
+    return _allowSyncCall;
 }
 
 Value ValueFunctionWithJSValue::doJsCall(JavaScriptEntryParameters& jsEntry,
@@ -226,6 +239,17 @@ Value ValueFunctionWithJSValue::operator()(const ValueFunctionCallContext& callC
     // later. In the mean time this allows native to return values to JS which is very useful.
 
     if (shouldCallSync(flags, *taskScheduler)) {
+        // Only assert on main thread: sync JS calls from main thread can cause ANR; worker threads are less
+        // problematic.
+        if (_mainThreadManager != nullptr && _mainThreadManager->currentThreadIsMainThread()) {
+            if (!isSyncCallAllowed(flags)) {
+                SC_ASSERT(
+                    false &&
+                    "Sync JS call is not allowed: this module has async_strict_mode enabled and the function is not "
+                    "annotated with @AllowSyncCall. Consider making the function return Promise or void, or add "
+                    "@AllowSyncCall to allow blocking the JS thread.");
+            }
+        }
         return callSync(flags, taskScheduler, callContext);
     } else if ((flags & ValueFunctionFlagsAllowThrottling) != ValueFunctionFlagsNone) {
         auto callId = ++_callSequence;

@@ -7,6 +7,13 @@
 #import "valdi/standalone_desktop/ValdiDesktopModuleInit.h"
 #import "valdi/macos/SCValdiRuntime.h"
 
+void SCValdiNativeModulesRegister(SCValdiRuntime* runtime) {
+    (void)runtime;
+    // Hook for desktop app to register additional native modules. SCValdiRuntime already
+    // registers device, application, strings in its init. No-op here; ValdiRunDesktopModuleInits
+    // is called after this from AppDelegate.
+}
+
 static SCValdiDesktopComponentContextProvider g_desktopComponentContextProvider;
 static ValdiDesktopContextProviderFn g_desktopContextProviderFn;
 static NSMutableDictionary *g_registeredContextEntries = nil;
