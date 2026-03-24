@@ -15,6 +15,7 @@
     { "name": "valdi-perf", "description": "Valdi performance: viewModel identity stability, createReusableCallback, layout vs view, Style interning", "tags": ["performance", "rendering"], "path": "skills/valdi-perf/skill.md", "category": ["client"] },
     { "name": "valdi-component-tests", "description": "Valdi component test patterns: elementKeyFind, componentTypeFind, tapNodeWithKey, discriminated unions, arrays", "tags": ["testing", "components", "jasmine"], "path": "skills/valdi-component-tests/skill.md", "category": ["client"] },
     { "name": "valdi-setup", "description": "Valdi module setup: BUILD.bazel, valdi_module(), tsconfig, deps, ios_module_name, hot reload", "tags": ["setup", "bazel", "build"], "path": "skills/valdi-setup/skill.md", "category": ["client"] },
-    { "name": "valdi-migrate", "description": "Migrate Flutter, React, or Jetpack Compose code to Valdi — component model, lifecycle, element mapping tables", "tags": ["migration", "flutter", "react", "compose"], "path": "skills/valdi-migrate/skill.md", "category": ["client"] }
+    { "name": "valdi-migrate", "description": "Migrate Flutter, React, or Jetpack Compose code to Valdi — component model, lifecycle, element mapping tables", "tags": ["migration", "flutter", "react", "compose"], "path": "skills/valdi-migrate/skill.md", "category": ["client"] },
+    { "name": "valdi-inspect", "description": "Inspect a live Valdi app: contexts, component trees, screenshots, heap dumps via valdi inspect CLI", "tags": ["inspect", "debug", "runtime", "cli"], "path": "skills/valdi-inspect/skill.md", "category": ["client"] }
   ]
 }
