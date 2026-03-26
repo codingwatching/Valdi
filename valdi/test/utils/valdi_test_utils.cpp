@@ -154,7 +154,8 @@ Valdi::Path resolveOpenSourceTestPath(const std::string& path) {
     char cwdBuffer[PATH_MAX];
     (void)::getcwd(cwdBuffer, PATH_MAX);
     auto basePath = Valdi::Path(cwdBuffer);
-    basePath.append("external/_main~local_repos~valdi/valdi");
+
+    basePath.append("external/+local_repos+valdi/valdi");
     basePath.append(path);
     basePath.normalize();
     return basePath;
