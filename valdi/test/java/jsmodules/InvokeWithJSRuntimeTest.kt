@@ -86,7 +86,7 @@ internal class InvokeWithJSRuntimeTest {
                 runtimeProviderCalled = true
                 mockRuntime
             },
-            completionHandler = { result: ITestObject ->
+            completionHandler = { _: ITestObject ->
                 // This won't be called without a real JS runtime
             }
         )
@@ -109,7 +109,7 @@ internal class InvokeWithJSRuntimeTest {
         // Call the generated method
         MakeTestObject.invokeWithJSRuntime(
             jsRuntimeProvider = { mockRuntime },
-            completionHandler = { testObject ->
+            completionHandler = { _ ->
                 // This lambda would be called with the actual ITestObject
                 // if we had a real JS runtime
             }
@@ -134,7 +134,7 @@ internal class InvokeWithJSRuntimeTest {
         // The fact that this compiles without type errors proves the signature is correct
         MakeTestObject.invokeWithJSRuntime(
             jsRuntimeProvider = { mockRuntime },
-            completionHandler = { testObject: ITestObject ->
+            completionHandler = { _: ITestObject ->
                 // Type checker validates that 'testObject' is ITestObject
                 // In a real integration test with a JS runtime, we would verify:
                 // - testObject.add(10.0) returns 10.0

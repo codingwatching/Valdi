@@ -37,4 +37,11 @@ data class ValdiTweaks(
          val disableHitTestSyncDeadline: Boolean = false,
          val enableTextAlignmentForRTL: Boolean = true,
          val updatePointScaleOnResume: Boolean = false,
+         /**
+          * When true, reverts [TouchDispatcher.hitTest] to the legacy behavior that builds the
+          * screen-space rect from `getLocationOnScreen(0,0) + view.width/height` without mapping
+          * all four corners through the parent-transform chain. Use as an escape hatch if the
+          * transform-aware hit-test causes regressions.
+          */
+         val disableTransformAwareHitTest: Boolean = false,
 )
