@@ -191,6 +191,9 @@ valdi_compiled = rule(
         "ios_module_name": attr.string(
             mandatory = True,
         ),
+        "ios_class_prefix": attr.string(
+            doc = "The class prefix for generated iOS classes",
+        ),
         "ios_output_target": attr.string(
             doc = "The iOS build type to build for",
             mandatory = True,
@@ -1308,6 +1311,7 @@ ios:
   output_target: {ios_output_target}
   module_name: {ios_module_name}
   language: {ios_language}
+  {ios_class_prefix}
 
 android:
   output_target: {android_output_target}
@@ -1347,6 +1351,7 @@ compilation_mode: {compilation_mode}
         disable_dependency_verification = "true" if attr.disable_dependency_verification else "false",
         async_strict_mode = "true" if attr.async_strict_mode else "false",
         dependencies_str = dependencies_str,
+        ios_class_prefix = "class_prefix: {}".format(attr.ios_class_prefix) if attr.ios_class_prefix else "",
         android_class_path = "class_path: {}".format(attr.android_class_path) if attr.android_class_path else "",
         exclude_patterns = _yaml_named_list("exclude_patterns", attr.exclude_patterns),
         exclude_globs = _yaml_named_list("exclude_globs", attr.exclude_globs),

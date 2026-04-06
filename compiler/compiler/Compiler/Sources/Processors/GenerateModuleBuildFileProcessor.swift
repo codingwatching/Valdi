@@ -11,6 +11,7 @@ private struct ModuleBuildTargetConfig {
     let projectConfig: ValdiProjectConfig
     let name: String
     let iosModuleName: String
+    let iosClassPrefix: String?
     let iosLanguage: IOSLanguage
     let iosGeneratedContextFactories: [String]
 
@@ -319,6 +320,7 @@ private struct ModuleBuildFile {
             """)
         }
 
+        maybeAppendStringAttribute("ios_class_prefix", value: config.iosClassPrefix)
         maybeAppendStringAttribute("strings_dir", value: config.stringsDir)
         maybeAppendStringAttribute("ids_yaml", value: config.idsYaml)
         maybeAppendStringAttribute("android_class_path", value: config.androidClassPath)
@@ -582,6 +584,7 @@ final class GenerateModuleBuildFileProcessor: CompilationProcessor {
         let config = ModuleBuildTargetConfig(projectConfig: self.projectConfig,
                                              name: moduleName,
                                              iosModuleName: bundleInfo.iosModuleName,
+                                             iosClassPrefix: bundleInfo.iosClassPrefix,
                                              iosLanguage: bundleInfo.iosLanguage,
                                              iosGeneratedContextFactories: bundleInfo.iosGeneratedContextFactories,
                                              iosOutputTarget: iosOutputTarget,

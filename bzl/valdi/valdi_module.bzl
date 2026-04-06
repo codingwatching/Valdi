@@ -47,6 +47,7 @@ def valdi_module(
         name,
         srcs,
         ios_module_name = None,
+        ios_class_prefix = None,
         ios_output_target = "release",
         android_output_target = "release",
         res = [],
@@ -105,6 +106,7 @@ def valdi_module(
         name: The name of the valdi module.
         module_yaml: The module.yaml file containing the module configuration.
         ios_module_name: The name of the iOS module from module.yaml
+        ios_class_prefix: The class prefix for generated iOS classes.
         ios_output_target: The iOS output target: "release" or "debug".
         android_class_path: Class path to use when generating Android source files.
         android_output_target: The Android output target: "release" or "debug".
@@ -153,6 +155,7 @@ def valdi_module(
     valdi_compiled(
         name = name,
         ios_module_name = ios_module_name,
+        ios_class_prefix = ios_class_prefix,
         ios_output_target = ios_output_target,
         android_output_target = android_output_target,
         android_export_strings = android_export_strings,
