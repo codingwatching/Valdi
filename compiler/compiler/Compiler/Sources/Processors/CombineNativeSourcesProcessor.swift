@@ -383,7 +383,6 @@ final class CombineNativeSourcesProcessor: CompilationProcessor {
                                               matchedItems: [SelectedItem<NativeSource>]) -> [CompilationItem] {
         var output = [CompilationItem]()
         let hasKotlin = matchedItems.contains(where: { $0.data.filename.hasSuffix(".kt") })
-        let hasSwift = matchedItems.contains(where: { $0.data.filename.hasSuffix(".swift") })
         let hasObjectiveC = matchedItems.contains(where: { $0.data.filename.hasSuffix(".m") })
         let hasCpp = matchedItems.contains(where: { $0.data.filename.hasSuffix(".cpp") })
 
@@ -411,8 +410,19 @@ final class CombineNativeSourcesProcessor: CompilationProcessor {
             }
         }
 
-        if bundle.iosCodegenEnabled && bundle.iosLanguage == .swift && !hasSwift {
-            output.append(makeEmptySource(bundle: bundle, filename: "\(bundle.iosModuleName).swift", platform: .ios))
+        if bundle.iosCodegenEnabled && (bundle.iosLanguage == .swift || bundle.iosLanguage == .both) {
+            let mainSwiftId = "\(bundle.iosModuleName).\(FileExtensions.swift)"
+            let typesSwiftId = "\(bundle.iosModuleName)\(IOSType.HeaderImportKind.apiOnlyModuleNameSuffix).\(FileExtensions.swift)"
+
+            let hasMainSwift = matchedItems.contains(where: { $0.data.groupingIdentifier == mainSwiftId })
+            let hasTypesSwift = matchedItems.contains(where: { $0.data.groupingIdentifier == typesSwiftId })
+
+            if !hasMainSwift {
+                output.append(makeEmptySource(bundle: bundle, filename: mainSwiftId, platform: .ios))
+            }
+            if !hasTypesSwift {
+                output.append(makeEmptySource(bundle: bundle, filename: typesSwiftId, platform: .ios))
+            }
         }
 
         if bundle.cppCodegenEnabled && !hasCpp {
