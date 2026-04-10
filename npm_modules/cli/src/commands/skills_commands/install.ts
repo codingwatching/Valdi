@@ -87,7 +87,11 @@ async function skillsInstall(argv: ArgumentsResolver<CommandParameters>) {
     }
   }
 
+  const claudeInstalled = adapters.some((a) => a.name === 'claude');
   console.log(`\nDone. Run ${wrapInColor('valdi skills list', ANSI_COLORS.BLUE_COLOR)} to see installed skills.`);
+  if (claudeInstalled) {
+    console.log(wrapInColor('Restart Claude Code to activate the new skills.', ANSI_COLORS.YELLOW_COLOR));
+  }
   if (!categoryFilter) {
     console.log(
       `Tip: install only module-development skills with ${wrapInColor('valdi skills install --category=client', ANSI_COLORS.BLUE_COLOR)}`,

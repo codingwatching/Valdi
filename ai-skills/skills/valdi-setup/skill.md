@@ -105,6 +105,21 @@ export class MyComponent extends StatefulComponent<MyComponentViewModel, MyState
 }
 ```
 
+## Registering in an App Target
+
+Your module must be added as a dependency of an application target to be compiled
+and linked. The exact location depends on your project — look for the list of
+Valdi module deps in the app's `BUILD.bazel` (often a `VALDI_MODULES` list or
+similar) and add your module:
+
+```python
+"//path/to/my_module:my_module",
+```
+
+Without this, the module will not be compiled or bundled — the app will fail at
+runtime with "No item named '...' in module '...'" even though the build itself
+may succeed.
+
 ## Building
 
 ```bash

@@ -55,10 +55,52 @@ class MyComponent extends Component<MyViewModel> {
 
 `viewFactory` and `*Class` attributes are mutually exclusive — use one or the other. `viewFactory` takes precedence when both are provided.
 
+## macOS Attribute Binding
+
+macOS custom views can bind attributes (including callbacks) from TSX using `+bindAttributes:`. The view manager calls this class method at registration time.
+
+```objc
+#import "valdi/macos/SCValdiMacOSAttributesBinder.h"
+#import "valdi/macos/SCValdiMacOSFunction.h"
+
+@interface SCMyView () {
+    SCValdiMacOSFunction *_onMyCallback;
+}
+@end
+
+@implementation SCMyView
+- (void)valdi_setOnMyCallback:(id)value { _onMyCallback = value; }
+
++ (void)bindAttributes:(SCValdiMacOSAttributesBinder *)attributesBinder {
+    [attributesBinder bindUntypedAttribute:@"onMyCallback"
+                invalidateLayoutOnChange:NO
+                                selector:@selector(valdi_setOnMyCallback:)];
+}
+@end
+```
+
+**Binder methods:**
+- `bindUntypedAttribute:invalidateLayoutOnChange:selector:` — binds any attribute (strings, numbers, functions)
+- `bindColorAttribute:invalidateLayoutOnChange:selector:` — binds color attributes specifically
+
+**Invoking callbacks:** Call `[_onMyCallback performWithParameters:@[@{@"key": @"value"}]]` — the NSArray/NSDictionary is auto-converted to JS objects.
+
+## Keyboard Input on macOS
+
+Valdi doesn't have built-in keyboard event support. Use a polyglot `<custom-view>` with an NSView that:
+1. Overrides `acceptsFirstResponder` → `YES`
+2. Overrides `keyDown:` to map key codes to callback invocations
+3. Calls `[self.window makeFirstResponder:self]` in `viewDidMoveToWindow` to grab focus
+4. Has **non-zero dimensions** (wrap visible content inside it)
+
+See the `valdi-polyglot-module` skill for a complete macOS attribute binding example with BUILD.bazel wiring.
+
 ## Common Mistakes
 
-- Using `<custom-view>` without checking the platform — wrap in `Device.isAndroid()` / `Device.isIOS()` etc. if not all platforms are supported
+- Using `<custom-view>` without checking the platform — wrap in `Device.isAndroid()` / `Device.isIOS()` / `Device.isDesktop()` if not all platforms are supported
 - Forgetting to link native implementations — the class name string alone isn't enough; the native code must be compiled and linked via platform `_deps` in BUILD.bazel
 - Wrong package name in `androidClass` — must match the Kotlin/Java package exactly
 - Specifying `macosClass` when it's the same as `iosClass` — omit it and let the fallthrough handle it
 - Using a `filegroup` for `web_deps` — always use `ts_project` with `transpiler = "tsc"`
+- Creating a 0×0 custom-view for keyboard focus — it won't become first responder; wrap content inside it
+- **Duplicate ObjC class names across modules** — if two modules define the same native class (e.g. both have `SCKeyboardView`), the linker will fail with "duplicate symbol" errors. Always use a unique class name per module (e.g. prefix with module name: `SCSnakeGameKeyboardView`)

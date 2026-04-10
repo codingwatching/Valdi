@@ -106,9 +106,17 @@ document.addEventListener('click', ...);  // Doesn't work!
   onChange={this.handleTextChange}
   onEditEnd={this.handleSubmit}
 />
+
+// ✅ CORRECT - For keyboard input on macOS desktop, use a polyglot <custom-view>
+// (see valdi-polyglot-module and valdi-custom-view skills for full pattern)
+{Device.isDesktop() && (
+  <custom-view macosClass='SCKeyboardView' onKeyDown={this.handleKeyDown} width={200} height={200}>
+    {/* wrap visible content so the view has non-zero size for first responder */}
+  </custom-view>
+)}
 ```
 
-**Important**: Valdi doesn't support `addEventListener`, `keydown`, or other global DOM events. Use element-specific callbacks like `onTap`, `onPress`, `onChange`, etc.
+**Important**: Valdi doesn't support `addEventListener`, `keydown`, or other global DOM events. Use element-specific callbacks like `onTap`, `onPress`, `onChange`, etc. For keyboard input on macOS desktop, use a polyglot `<custom-view>` with a native NSView that captures `keyDown:` events and forwards them via a bound callback attribute.
 
 ## Timers and Scheduling
 
@@ -328,6 +336,28 @@ const layoutStyle = new Style<Layout>({ padding: 10 });
 > 
 > **📖 Best practices**: See `/docs/docs/core-styling.md` for styling patterns and examples
 
+## @ExportModel ViewModel Restrictions
+
+Interfaces annotated with `@ViewModel @ExportModel` are exported to native code. The Valdi compiler can only export **primitive types** (`string`, `number`, `boolean`) and other `@ExportModel`-annotated interfaces. Custom type aliases (e.g. `type Direction = 'UP' | 'DOWN'`) are **not supported** in exported ViewModels.
+
+```typescript
+// ❌ WRONG — type alias in @ExportModel ViewModel
+type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
+
+/** @ViewModel @ExportModel */
+interface GameViewModel {
+  initialDirection?: Direction;  // ❌ Compiler error: "Unrecognized type"
+}
+
+// ✅ CORRECT — keep custom types in State (internal), not ViewModel (exported)
+/** @ViewModel @ExportModel */
+interface GameViewModel {}  // Only export what native code needs
+
+interface GameState {
+  direction: Direction;  // ✅ Fine — State is not exported
+}
+```
+
 ## Common Mistakes to Avoid
 
 1. **Returning JSX from onRender()** - It returns void, JSX is a statement
@@ -341,6 +371,7 @@ const layoutStyle = new Style<Layout>({ padding: 10 });
 9. **Using `flex: 1`** - `flex` doesn't exist on `View`; use `flexGrow: 1` instead
 10. **Using `fontSize` on Label** - Labels use `font: 'system 20'` (string), not `fontSize`
 11. **Using `overflow: 'hidden'`** - `View` only accepts `'visible' | 'scroll'`; remove overflow or use 'scroll'
+12. **Using type aliases in `@ExportModel` ViewModels** - Only primitives and other `@ExportModel` types are allowed
 
 ## Platform Detection
 
@@ -354,14 +385,16 @@ class MyComponent extends Component<MyViewModel> {
     <view>
       {Device.isIOS() && <IOSOnlyView />}
       {Device.isAndroid() && <AndroidOnlyView />}
-      {Device.isMacOS() && <MacOSOnlyView />}
+      {Device.isDesktop() && <DesktopOnlyView />}
       {Device.isWeb() && <WebOnlyView />}
     </view>;
   }
 }
 ```
 
-Also use `Device.isIOS()` / `Device.isAndroid()` guards before using `<custom-view>` elements that don't have implementations on all platforms.
+**Available guards:** `Device.isIOS()`, `Device.isAndroid()`, `Device.isDesktop()`, `Device.isWeb()`
+
+Use platform guards before using `<custom-view>` elements that don't have implementations on all platforms. `Device.isDesktop()` is true for macOS desktop apps (the preview/standalone app). There is no `Device.isMacOS()` — use `Device.isDesktop()` instead.
 
 ## Imports
 

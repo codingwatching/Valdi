@@ -11,7 +11,39 @@ export interface SkillAdapter {
   listInstalled(): string[];
 }
 
-// ClaudeCodeAdapter: installs to ~/.claude/plugins/valdi/skills/<name>/SKILL.md
+// ClaudeCodeAdapter: installs to ~/.claude/plugins/local/valdi/skills/<name>/SKILL.md
+// and registers the plugin in ~/.claude/plugins/installed_plugins.json so Claude Code
+// picks up the skills as slash commands.
+const CLAUDE_PLUGIN_ID = 'valdi@local';
+const CLAUDE_PLUGIN_DIR = path.join(os.homedir(), '.claude', 'plugins', 'local', 'valdi');
+const CLAUDE_INSTALLED_PLUGINS = path.join(os.homedir(), '.claude', 'plugins', 'installed_plugins.json');
+
+function ensureClaudePluginRegistered(): void {
+  let registry: { version: number; plugins: Record<string, unknown[]> } = {
+    version: 2,
+    plugins: {},
+  };
+  if (fs.existsSync(CLAUDE_INSTALLED_PLUGINS)) {
+    try {
+      registry = JSON.parse(fs.readFileSync(CLAUDE_INSTALLED_PLUGINS, 'utf8'));
+    } catch {
+      // Corrupt file — start fresh
+    }
+  }
+  if (!registry.plugins[CLAUDE_PLUGIN_ID]) {
+    registry.plugins[CLAUDE_PLUGIN_ID] = [
+      {
+        scope: 'user',
+        installPath: CLAUDE_PLUGIN_DIR,
+        version: '1.0.0',
+        installedAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+      },
+    ];
+    fs.writeFileSync(CLAUDE_INSTALLED_PLUGINS, JSON.stringify(registry, null, 2), 'utf8');
+  }
+}
+
 const ClaudeCodeAdapter: SkillAdapter = {
   name: 'claude',
   detect() {
@@ -19,19 +51,20 @@ const ClaudeCodeAdapter: SkillAdapter = {
     return fs.existsSync(claudeDir);
   },
   install(skillName: string, content: string, meta: SkillMeta) {
-    const skillDir = path.join(os.homedir(), '.claude', 'plugins', 'valdi', 'skills', skillName);
+    const skillDir = path.join(CLAUDE_PLUGIN_DIR, 'skills', skillName);
     fs.mkdirSync(skillDir, { recursive: true });
     const frontmatter = `---\nname: ${meta.name}\ndescription: ${meta.description}\n---\n\n`;
     fs.writeFileSync(path.join(skillDir, 'SKILL.md'), frontmatter + content, 'utf8');
+    ensureClaudePluginRegistered();
   },
   remove(skillName: string) {
-    const skillDir = path.join(os.homedir(), '.claude', 'plugins', 'valdi', 'skills', skillName);
+    const skillDir = path.join(CLAUDE_PLUGIN_DIR, 'skills', skillName);
     if (fs.existsSync(skillDir)) {
       fs.rmSync(skillDir, { recursive: true, force: true });
     }
   },
   listInstalled() {
-    const skillsDir = path.join(os.homedir(), '.claude', 'plugins', 'valdi', 'skills');
+    const skillsDir = path.join(CLAUDE_PLUGIN_DIR, 'skills');
     if (!fs.existsSync(skillsDir)) return [];
     return fs
       .readdirSync(skillsDir)

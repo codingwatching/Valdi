@@ -117,8 +117,88 @@ See `valdi_polyglot` module for a complete working example with all four platfor
 - `src/composer_modules/src/composer/valdi_polyglot/` (in the Snap monorepo)
 - Or the equivalent path in your project
 
+## macOS Native View with Attribute Binding
+
+macOS `<custom-view>` implementations can receive callback attributes from TSX via `SCValdiMacOSFunction`. This is how you bridge events (like keyboard input) from native AppKit views back to Valdi components.
+
+### Native Side (Objective-C)
+
+```objc
+// macos/SCMyView.h
+#import <AppKit/AppKit.h>
+@class SCValdiMacOSAttributesBinder;
+
+@interface SCMyView : NSView
++ (void)bindAttributes:(SCValdiMacOSAttributesBinder *)attributesBinder;
+@end
+
+// macos/SCMyView.m
+#import "SCMyView.h"
+#import "valdi/macos/SCValdiMacOSAttributesBinder.h"
+#import "valdi/macos/SCValdiMacOSFunction.h"
+
+@interface SCMyView () {
+    SCValdiMacOSFunction *_onEvent;
+}
+@end
+
+@implementation SCMyView
+
+- (void)valdi_setOnEvent:(id)value {
+    _onEvent = value;
+}
+
+// Call the Valdi callback with a dictionary parameter:
+// [_onEvent performWithParameters:@[@{@"key": @"ArrowUp"}]];
+
++ (void)bindAttributes:(SCValdiMacOSAttributesBinder *)attributesBinder {
+    [attributesBinder bindUntypedAttribute:@"onEvent"
+                invalidateLayoutOnChange:NO
+                                selector:@selector(valdi_setOnEvent:)];
+}
+@end
+```
+
+### TSX Side
+
+```typescript
+<custom-view
+  macosClass='SCMyView'
+  onEvent={this.handleEvent}
+  width={200}
+  height={200}
+>
+  {/* child elements render inside the custom-view */}
+</custom-view>
+```
+
+### BUILD.bazel
+
+```python
+objc_library(
+    name = "macos_impl",
+    srcs = glob(["macos/**/*.m"]),
+    hdrs = glob(["macos/**/*.h"]),
+    copts = ["-I."],
+    sdk_frameworks = ["AppKit"],
+    visibility = ["//visibility:public"],
+    deps = ["@valdi//valdi:valdi_macos_desktop_lib"],
+)
+```
+
+### Key Points
+
+- The attribute name in `bindUntypedAttribute:` must match the TSX attribute name exactly (e.g. `"onEvent"` ↔ `onEvent={...}`)
+- Callback values arrive as `SCValdiMacOSFunction` objects — call `[callback performWithParameters:@[...]]` to invoke the Valdi/JS function
+- Parameters are passed as an `NSArray` of `NSDictionary`/`NSString`/`NSNumber` — they're auto-converted to JS objects
+- **The custom-view must have non-zero dimensions** to participate in the responder chain (for keyboard focus, etc.)
+- For keyboard input: override `acceptsFirstResponder` → `YES`, `keyDown:`, and call `[self.window makeFirstResponder:self]` in `viewDidMoveToWindow`
+- Add `bazel_build_file_generation_disabled: true` to `module.yaml` when hand-maintaining the BUILD file (prevents the regenerate script from overwriting it)
+
 ## Common Mistakes
 
 - Putting `web/` files in `srcs` — they must go through `ts_project` + `web_deps`, not the Valdi compiler
 - Missing platform `_deps` — each platform impl must be wired via `android_deps`, `ios_deps`, `macos_deps`
 - Using Valdi imports in `web/` — they don't exist in the browser bundle
+- Creating a 0×0 custom-view for keyboard input — macOS won't give it first responder status; wrap visible content inside it instead
+- Forgetting `bazel_build_file_generation_disabled: true` in module.yaml — the regenerate script will overwrite your hand-maintained BUILD and drop the `macos_deps`/`ios_deps`

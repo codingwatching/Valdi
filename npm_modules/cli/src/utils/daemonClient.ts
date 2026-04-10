@@ -384,7 +384,11 @@ async function tryAdbForward(port: number): Promise<void> {
 }
 
 export async function connectToDaemon(port: number = DEFAULT_PORT): Promise<DaemonConnection> {
-  await tryAdbForward(port);
+  // Only run adb forward for mobile ports — standalone apps listen directly on their port
+  // and adb forward would shadow the listener, causing connection failures.
+  if (port !== STANDALONE_PORT) {
+    await tryAdbForward(port);
+  }
   return new Promise((resolve, reject) => {
     const socket = net.createConnection({ port, host: '127.0.0.1' });
 
