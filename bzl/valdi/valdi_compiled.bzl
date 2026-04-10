@@ -193,6 +193,7 @@ valdi_compiled = rule(
         ),
         "ios_class_prefix": attr.string(
             doc = "The class prefix for generated iOS classes",
+            default = "__valdi_unset_ios_class_prefix__",
         ),
         "ios_output_target": attr.string(
             doc = "The iOS build type to build for",
@@ -259,6 +260,10 @@ valdi_compiled = rule(
         "downloadable_assets": attr.bool(
             doc = "Controls how module's assets are acquired: downloaded from Bolt or bundled with the module",
             default = True,
+        ),
+        "downloadable_sources": attr.bool(
+            doc = "Controls whether module sources are downloaded from Bolt or bundled with the module",
+            default = False,
         ),
         "strip_assets": attr.bool(
             doc = "Whether assets should be stripped from the output",
@@ -1351,7 +1356,7 @@ compilation_mode: {compilation_mode}
         disable_dependency_verification = "true" if attr.disable_dependency_verification else "false",
         async_strict_mode = "true" if attr.async_strict_mode else "false",
         dependencies_str = dependencies_str,
-        ios_class_prefix = "class_prefix: {}".format(attr.ios_class_prefix) if attr.ios_class_prefix else "",
+        ios_class_prefix = "class_prefix: {}".format(attr.ios_class_prefix) if attr.ios_class_prefix != "__valdi_unset_ios_class_prefix__" else "",
         android_class_path = "class_path: {}".format(attr.android_class_path) if attr.android_class_path else "",
         exclude_patterns = _yaml_named_list("exclude_patterns", attr.exclude_patterns),
         exclude_globs = _yaml_named_list("exclude_globs", attr.exclude_globs),
@@ -1359,6 +1364,28 @@ compilation_mode: {compilation_mode}
 
     if attr.strings_dir:
         module_def += "\nstrings_dir: {}".format(attr.strings_dir)
+
+    # Emit the downloadable config only when assets are remote (downloadable_assets=True, not
+    # inlined) and the output target is non-debug. Debug targets cannot have downloadable sources
+    # (the compiler enforces this) and don't need remote assets.
+    #
+    # We always emit the structured form `downloadable:\n  assets: true` rather than the boolean
+    # shorthand `downloadable: true`, because the boolean form also enables downloadableSources in
+    # the compiler (BundleManager.swift), which triggers source uploads to Bolt. Only modules that
+    # explicitly opt in via downloadable_sources = True should have that behaviour.
+    #
+    # Note: omitting the `downloadable` key entirely is also valid — the compiler defaults to
+    # downloadableAssets=true, downloadableSources=false — but we emit it explicitly so the
+    # generated yaml matches what checked-in module.yamls specify and the intent is clear.
+    #
+    # The combination downloadable_assets=False + downloadable_sources=True is not supported:
+    # downloadable_assets=False passes --disable-downloadable-modules to the compiler, which
+    # overrides both flags regardless of the yaml.
+    if attr.downloadable_assets and not attr.inline_assets and ios_output_target != "debug" and android_output_target != "debug":
+        if attr.downloadable_sources:
+            module_def += "\ndownloadable: true"
+        else:
+            module_def += "\ndownloadable:\n  assets: true"
 
     return module_def
 

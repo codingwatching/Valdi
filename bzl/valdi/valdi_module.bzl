@@ -61,6 +61,7 @@ def valdi_module(
         sql_db_names = None,
         sql_srcs = [],
         downloadable_assets = None,
+        downloadable_sources = False,
         test_target_name = "test",
         compilation_mode = "js_bytecode",
         # class path of generated files
@@ -128,6 +129,7 @@ def valdi_module(
         has_ios_exports: Flag to indicate if the module has iOS native exports (default True).
         has_android_exports: Flag to indicate if the module has Android native exports (default True).
         downloadable_assets: Flag to indicate if the module resources are downloaded remotely or bundled with the app.
+        downloadable_sources: Flag to indicate if the module sources are downloaded remotely or bundled with the module.
         compilation_mode: The JavaScript compilation mode of the valdi module. Can be "js_bytecode", "native" or "js".
         no_compiled_valdimodule_output: Flag to indicate that the module doesn't produce compiled valdi module output.
         visibility: The visibility of the Bazel target
@@ -186,6 +188,7 @@ def valdi_module(
             "@valdi//bzl/valdi:strip_assets": False,
             "@valdi//bzl/valdi:inline_assets": False,
         }),
+        downloadable_sources = downloadable_sources,
         strip_assets = False if prepared_upload_artifact_name else select({
             "@valdi//bzl/valdi:strip_assets": downloadable_assets,
             "@valdi//bzl/valdi:upload_assets": False,
