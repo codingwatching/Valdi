@@ -29,6 +29,7 @@ import com.snap.valdi.views.ValdiClippableView
 import com.snap.valdi.views.ValdiForegroundHolder
 import com.snap.valdi.views.touches.ValdiGestureRecognizer
 import com.snap.valdi.views.touches.GestureRecognizers
+import com.snapchat.client.valdi.UndefinedValue
 import com.snapchat.client.valdi.utils.NativeHandleWrapper
 
 object ViewUtils {
@@ -512,6 +513,10 @@ object ViewUtils {
      * Resolves the IValdiViewNode instance from the given Ref object
      */
     fun getViewNodeFromRef(ref: Ref): IValdiViewNode? {
+        // UndefinedValue may be returned by the Valdi C++ bridge when a component ref is in an
+        // undefined state (not yet initialized or already destroyed). It doesn't implement Ref
+        // despite being passed as one, so calling ref.get() would throw IncompatibleClassChangeError.
+        if ((ref as Any) is UndefinedValue) return null
         val item = ref.get()
 
         return when (item) {
@@ -526,6 +531,7 @@ object ViewUtils {
      */
     @Deprecated("This will stop working with SnapDrawing. Use getViewNodeFromRef() instead")
     fun getViewFromRef(ref: Ref): View? {
+        if ((ref as Any) is UndefinedValue) return null
         val item = ref.get()
 
         return when (item) {
@@ -539,6 +545,7 @@ object ViewUtils {
      * Return a Drawable representation of the given Ref.
      */
     fun refToDrawable(ref: Ref): Drawable? {
+        if ((ref as Any) is UndefinedValue) return null
         val item = ref.get()
 
         return when (item) {
