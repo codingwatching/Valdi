@@ -30,6 +30,9 @@ private struct ModuleBuildTargetConfig {
     let sqlDatabaseNames: [String]?
     let protoDeclSourceDirs: SourceDirTracking
 
+    let compilationModeConfig: CompilationModeConfig
+    let compilationModeExplicit: Bool
+
     let disableAnnotationProcessing: Bool
     let asyncStrictMode: Bool
     let stringsDir: String?
@@ -331,6 +334,10 @@ private struct ModuleBuildFile {
         case .both: maybeAppendStringListAttribute("ios_language", values: ["objc", "swift"])
         }
 
+        if config.compilationModeExplicit, let compilationModeStr = config.compilationModeConfig.asBazelString {
+            maybeAppendStringAttribute("compilation_mode", value: compilationModeStr)
+        }
+
         maybeAppendBoolAttribute("disable_annotation_processing", value: config.disableAnnotationProcessing, appendOnlyIf: .valueTrue)
 
         maybeAppendBoolAttribute("async_strict_mode", value: config.asyncStrictMode, appendOnlyIf: .valueTrue)
@@ -600,6 +607,8 @@ final class GenerateModuleBuildFileProcessor: CompilationProcessor {
                                              sqlSourceDirs: sqlSourceDirs,
                                              sqlDatabaseNames: sqlDatabaseNames,
                                              protoDeclSourceDirs: protoDeclSourceDirs,
+                                             compilationModeConfig: bundleInfo.compilationModeConfig,
+                                             compilationModeExplicit: bundleInfo.compilationModeExplicit,
                                              disableAnnotationProcessing: bundleInfo.disableAnnotationProcessing,
                                              asyncStrictMode: bundleInfo.asyncStrictMode,
                                              stringsDir: bundleInfo.stringsConfig?.bundleRelativePath,

@@ -257,6 +257,7 @@ struct CompilationItem {
         let dependencies: [BundleInfo]
 
         let compilationModeConfig: CompilationModeConfig
+        let compilationModeExplicit: Bool
 
         let projectConfig: ValdiProjectConfig
 
@@ -326,6 +327,7 @@ struct CompilationItem {
              disableCodeCoverage: Bool,
              singleFileCodegen: Bool,
              compilationModeConfig: CompilationModeConfig,
+             compilationModeExplicit: Bool,
              iosOutputTarget: ModuleOutputTarget?,
              iosGeneratedContextFactories: [String],
              androidOutputTarget: ModuleOutputTarget?,
@@ -369,6 +371,7 @@ struct CompilationItem {
             self.allDependenciesNames = Set(allDependencies.map { $0.name })
 
             self.compilationModeConfig = compilationModeConfig
+            self.compilationModeExplicit = compilationModeExplicit
             self.projectConfig = projectConfig
 
             if !isRoot {
