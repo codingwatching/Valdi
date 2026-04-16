@@ -1,10 +1,9 @@
 package com.snap.valdi.nativebridge
 
 import android.os.SystemClock
-import android.os.Handler
-import android.os.Looper
 import android.view.Choreographer
 import android.view.View
+import android.view.ViewGroup
 import com.snap.valdi.ViewRef
 import com.snap.valdi.attributes.AttributeHandlerDelegate
 import com.snap.valdi.attributes.BooleanAttributeHandlerDelegate
@@ -385,10 +384,56 @@ class ValdiViewManagerOperationsManager(
         if (hasValue) {
             val parentView = attachedValues[buffer.int] as ViewRef
             val viewIndex = buffer.int
+            val childView = view.get()
+            val parentViewObj = parentView.get()
+            val childClass = childView?.javaClass?.simpleName ?: "?"
+            val parentClass = parentViewObj?.javaClass?.simpleName ?: "?"
+            val depth = countViewGroupDepth(childView)
+
+            currentMoveOp = "child=$childClass(depth=$depth) -> parent=$parentClass idx=$viewIndex"
+
+            val startNs = System.nanoTime()
             parentView.insertChild(view, viewIndex)
+            val elapsedMs = (System.nanoTime() - startNs) / 1_000_000
+
+            if (elapsedMs > slowestInsertChildMs) {
+                slowestInsertChildMs = elapsedMs
+                slowestInsertChildOp = currentMoveOp
+                if (depth >= 4 && childView != null) {
+                    val sb = StringBuilder()
+                    dumpViewHierarchy(sb, childView, 0)
+                    slowestInsertChildHierarchy = sb.toString()
+                } else {
+                    slowestInsertChildHierarchy = null
+                }
+            }
+            currentMoveOp = null
         } else {
             val shouldClearViewNode = buffer.int != 0
             view.removeFromParent(shouldClearViewNode)
+        }
+    }
+
+    private fun countViewGroupDepth(view: View?): Int {
+        if (view !is ViewGroup || view.childCount == 0) return 0
+        var maxChildDepth = 0
+        for (i in 0 until view.childCount) {
+            val d = countViewGroupDepth(view.getChildAt(i))
+            if (d > maxChildDepth) maxChildDepth = d
+        }
+        return 1 + maxChildDepth
+    }
+
+    private fun dumpViewHierarchy(sb: StringBuilder, view: View, level: Int) {
+        val name = view.javaClass.simpleName
+        sb.append("  ".repeat(level)).append(name)
+        if (view is ViewGroup) {
+            sb.append("(${view.childCount}ch)")
+            for (i in 0 until view.childCount) {
+                val child = view.getChildAt(i) ?: continue
+                sb.append("\n")
+                dumpViewHierarchy(sb, child, level + 1)
+            }
         }
     }
 
@@ -409,6 +454,51 @@ class ValdiViewManagerOperationsManager(
     }
 
     companion object {
+        /**
+         * Diagnostic state for ANR crash reports. Updated on main thread only.
+         *
+         * [currentMoveOp] is set before insertChild and cleared after — if an ANR
+         * fires mid-operation this tells us exactly which view was being attached.
+         * [slowestInsertChildOp] / [slowestInsertChildMs] track the worst-case
+         * insertChild since the last reset, helping triage teams identify which
+         * view subtree is problematic (e.g. a RecyclerView with accumulated
+         * HandlerActionQueue entries).
+         */
+        @Volatile var currentMoveOp: String? = null
+            private set
+        @Volatile var slowestInsertChildMs: Long = 0
+            private set
+        @Volatile var slowestInsertChildOp: String? = null
+            private set
+        @Volatile var slowestInsertChildHierarchy: String? = null
+            private set
+
+        fun dumpDiagnostics(): String? {
+            val current = currentMoveOp
+            val slowestOp = slowestInsertChildOp
+            if (current == null && slowestOp == null) return null
+
+            val sb = StringBuilder()
+            if (current != null) {
+                sb.append("IN_PROGRESS: ").append(current)
+            }
+            if (slowestOp != null) {
+                if (sb.isNotEmpty()) sb.append(" | ")
+                sb.append("SLOWEST: ").append(slowestOp)
+                    .append(" (").append(slowestInsertChildMs).append("ms)")
+                slowestInsertChildHierarchy?.let { h ->
+                    sb.append("\n").append(h)
+                }
+            }
+            return sb.toString()
+        }
+
+        fun resetDiagnostics() {
+            slowestInsertChildMs = 0
+            slowestInsertChildOp = null
+            slowestInsertChildHierarchy = null
+        }
+
         private const val OP_BEGIN_RENDERING_VIEW = 1
         private const val OP_END_RENDERING_VIEW = 2
         private const val OP_MOVED_TO_TREE = 3
