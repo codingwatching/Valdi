@@ -74,15 +74,16 @@ struct ValdiCompilerArguments: ParsableCommand {
     @Option(help: "the maximum number of concurrent requests to process module uploads")
     var maxUploadConcurrentRequests: Int = 4
 
-    @Option(help: "Whether to compile for debug, release, or both", transform: {
-        if $0 == "debug" {
+    // Explicit closure return type disambiguates the Optional-wrapping vs non-wrapping
+    @Option(help: "Whether to compile for debug, release, or both", transform: { (arg: String) throws -> OutputTarget in
+        if arg == "debug" {
             return OutputTarget.debug
-        } else if $0 == "release" {
+        } else if arg == "release" {
             return OutputTarget.release
-        } else if $0 == "all" {
+        } else if arg == "all" {
             return OutputTarget.all
         } else {
-            throw ValidationError("Unsupported output target '\($0)', must be one of 'debug', 'release' or 'all'")
+            throw ValidationError("Unsupported output target '\(arg)', must be one of 'debug', 'release' or 'all'")
         }
     })
     var outputTarget: OutputTarget?
