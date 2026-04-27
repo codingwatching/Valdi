@@ -145,14 +145,36 @@ def _valdi_compiled_impl(ctx):
     enable_android = target_platforms in ("all", "android")
     enable_ios = target_platforms in ("all", "ios")
 
-    outputs = _invoke_valdi_compiler(ctx, module_name, module_yaml, enable_android, enable_ios)
+    # Global build-flavor filter. Debug-only modules (output_target != "release") always
+    # emit debug as a floor regardless of these flags — that fallback lives inside
+    # _append_debug_and_maybe_release so a flavor=release build applied globally still
+    # produces artifacts for a module whose platform happens to be debug-only.
+    output_flavor = ctx.attr.output_flavor[BuildSettingInfo].value
+    if code_coverage or output_flavor == "debug":
+        emit_debug = True
+        emit_release = False
+    elif output_flavor == "release":
+        emit_debug = False
+        emit_release = True
+    else:
+        emit_debug = True
+        emit_release = True
+
+    outputs = _invoke_valdi_compiler(ctx, module_name, module_yaml, enable_android, enable_ios, emit_debug, emit_release)
 
     if not ctx.attr.single_file_codegen and ctx.attr.has_android_exports and enable_android:
-        outputs += _compress_generated_android_srcs(ctx, module_name, outputs, code_coverage)
+        # Compute the set of Android variants that were actually declared for this module,
+        # so _compress_generated_android_srcs zips exactly those src directories.
+        android_variants = []
+        if emit_debug or ctx.attr.android_output_target != "release":
+            android_variants.append("debug")
+        if emit_release and ctx.attr.android_output_target == "release":
+            android_variants.append("release")
+        outputs += _compress_generated_android_srcs(ctx, module_name, outputs, android_variants)
 
     return [
         DefaultInfo(files = depset([o for o in outputs if o.path.endswith(".valdimodule")])),
-        _create_valdi_module_info(ctx, module_name, module_yaml, module_definition, outputs, code_coverage, enable_android, enable_ios),
+        _create_valdi_module_info(ctx, module_name, module_yaml, module_definition, outputs, code_coverage, enable_android, enable_ios, emit_debug, emit_release),
     ]
 
 # valdi_compiled rule:
@@ -336,6 +358,10 @@ valdi_compiled = rule(
             doc = "Which mobile platforms to generate compiler output for. Accepts the flag at @valdi//bzl/valdi:target_platforms (values: all, android, ios). C++ output is always generated regardless of this setting. Default 'all' preserves existing behaviour.",
             default = "@valdi//bzl/valdi:target_platforms",
         ),
+        "output_flavor": attr.label(
+            doc = "Which build flavor(s) to emit. Accepts @valdi//bzl/valdi:output_flavor (values: all, debug, release). 'all' preserves existing behaviour — emits both debug and release variants when the module's output_target allows it. 'debug' or 'release' restricts to that single variant for release-ready modules, skipping the other to save compile time. Debug-only modules always emit debug regardless of this setting.",
+            default = "@valdi//bzl/valdi:output_flavor",
+        ),
         # NOTE: Valdi base should probably be moved to its own directory
         "_valdi_base": attr.label(
             doc = "The base module that all Valdi modules depend on",
@@ -349,7 +375,7 @@ valdi_compiled = rule(
     },
 )
 
-def _invoke_valdi_compiler(ctx, module_name, module_yaml, enable_android = True, enable_ios = True):
+def _invoke_valdi_compiler(ctx, module_name, module_yaml, enable_android = True, enable_ios = True, emit_debug = True, emit_release = True):
     """ Invoke valdi Compiler for the requested module.
 
         This function takes care of reproducing the required directory structure which Valdi expects
@@ -361,6 +387,8 @@ def _invoke_valdi_compiler(ctx, module_name, module_yaml, enable_android = True,
         module_yaml: The module.yaml file for this module
         enable_android: Whether to generate Android outputs
         enable_ios: Whether to generate iOS outputs
+        emit_debug: Whether the current build flavor wants debug artifacts
+        emit_release: Whether the current build flavor wants release artifacts
 
     Returns:
         A list of files that are produced by the Valdi compiler
@@ -394,7 +422,7 @@ def _invoke_valdi_compiler(ctx, module_name, module_yaml, enable_android = True,
 
     #############
     # 3. Gather all outputs produced by the Valdi compiler
-    (base_output_dir, outputs) = _declare_compiler_outputs(ctx, module_name, module_directory, localization_mode, enable_web, code_coverage, enable_android, enable_ios)
+    (base_output_dir, outputs) = _declare_compiler_outputs(ctx, module_name, module_directory, localization_mode, enable_web, code_coverage, enable_android, enable_ios, emit_debug, emit_release)
 
     prepared_upload_artifact_file = None
     if ctx.attr.prepared_upload_artifact_name:
@@ -413,7 +441,25 @@ def _invoke_valdi_compiler(ctx, module_name, module_yaml, enable_android = True,
         valdi_copts.append("--config-value")
         valdi_copts.append("module_upload_base_url={}".format(module_upload_base_url))
 
-    args = _prepare_arguments(ctx.actions.args(), ctx.attr.log_level[BuildSettingInfo].value, localization_mode, js_bytecode_format, config_yaml_file, explicit_input_list_file, module_name, base_output_dir, disable_downloadable_assets, ctx.configuration.default_shell_env, prepared_upload_artifact_file, ctx.attr.inline_assets, valdi_copts, enable_web, disable_minify_web, code_coverage, enable_android, enable_ios)
+    # Compute the --output-target to pass to the compiler. This only restricts compiler
+    # output when the flavor flag explicitly asks for it; "all" (the default) preserves
+    # existing behaviour and still produces C++ (always release-path) for every module.
+    #
+    # Under flavor=release we degrade to "all" if any enabled platform on this module is
+    # debug-only — otherwise the compiler would emit nothing for that platform (see
+    # CompilationItem.getOutputDirectories), but _append_debug_and_maybe_release still
+    # declared debug for it as a module-level floor.
+    output_flavor_val = ctx.attr.output_flavor[BuildSettingInfo].value
+    if code_coverage or output_flavor_val == "debug":
+        compiler_output_target = "debug"
+    elif output_flavor_val == "release":
+        android_ready = not enable_android or ctx.attr.android_output_target == "release"
+        ios_ready = not enable_ios or ctx.attr.ios_output_target == "release"
+        compiler_output_target = "release" if (android_ready and ios_ready) else "all"
+    else:
+        compiler_output_target = "all"
+
+    args = _prepare_arguments(ctx.actions.args(), ctx.attr.log_level[BuildSettingInfo].value, localization_mode, js_bytecode_format, config_yaml_file, explicit_input_list_file, module_name, base_output_dir, disable_downloadable_assets, ctx.configuration.default_shell_env, prepared_upload_artifact_file, ctx.attr.inline_assets, valdi_copts, enable_web, disable_minify_web, code_coverage, enable_android, enable_ios, emit_debug, emit_release, compiler_output_target)
 
     #############
     # 5. Set up the action that executes the Valdi compiler
@@ -554,16 +600,16 @@ def _prepare_explicit_input_list_file(ctx, module_yaml):
 
     return (explicit_input_list_file, ctx.files._valdi_base + dependencies_list, direct_module_directory)
 
-def _declare_compiler_outputs(ctx, module_name, module_directory, localization_mode, enable_web, code_coverage, enable_android = True, enable_ios = True):
-    files_output_paths = _get_files_output_paths(ctx, module_name, module_directory, localization_mode, enable_web, code_coverage, enable_android, enable_ios)
-    directories_output_paths = _get_directories_output_paths(ctx, code_coverage, enable_android, enable_ios)
+def _declare_compiler_outputs(ctx, module_name, module_directory, localization_mode, enable_web, code_coverage, enable_android = True, enable_ios = True, emit_debug = True, emit_release = True):
+    files_output_paths = _get_files_output_paths(ctx, module_name, module_directory, localization_mode, enable_web, code_coverage, enable_android, enable_ios, emit_debug, emit_release)
+    directories_output_paths = _get_directories_output_paths(ctx, code_coverage, enable_android, enable_ios, emit_debug, emit_release)
     outputs = []
     outputs += _declare_files(ctx, files_output_paths)
     outputs += _declare_directories(ctx, directories_output_paths)
 
     return (infer_base_output_dir(files_output_paths + directories_output_paths, outputs), outputs)
 
-def _get_files_output_paths(ctx, module_name, module_directory, localization_mode, enable_web, code_coverage, enable_android = True, enable_ios = True):
+def _get_files_output_paths(ctx, module_name, module_directory, localization_mode, enable_web, code_coverage, enable_android = True, enable_ios = True, emit_debug = True, emit_release = True):
     filtered_srcs = _get_compiled_srcs(ctx)
     outputs = _get_srcs_dts_paths(filtered_srcs, module_name, module_directory)
 
@@ -580,23 +626,23 @@ def _get_files_output_paths(ctx, module_name, module_directory, localization_mod
     if _will_generate_valdimodule(ctx):
         # Gather .valdimodule which are only generated if there are source files
         if enable_android:
-            outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_valdi_module_paths(module_name))
+            outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_valdi_module_paths(module_name), emit_debug, emit_release)
         if enable_ios:
-            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_valdi_module_paths(module_name))
+            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_valdi_module_paths(module_name), emit_debug, emit_release)
 
         # Gather .map.json, which are only generated if there are source files
         # Note: sourcemaps are not generated when code coverage is enabled
         if not code_coverage:
             if enable_android:
-                outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_valdi_module_map_paths(module_name))
+                outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_valdi_module_map_paths(module_name), emit_debug, emit_release)
             if enable_ios:
-                outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_valdi_module_map_paths(module_name))
+                outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_valdi_module_map_paths(module_name), emit_debug, emit_release)
 
     # Gather .c files (only if module has native exports)
     if enable_android and ctx.attr.has_android_exports:
-        outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_generated_native_src_paths(module_name))
+        outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_generated_native_src_paths(module_name), emit_debug, emit_release)
     if enable_ios and ctx.attr.has_ios_exports:
-        outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_native_src_paths(ctx.attr.ios_module_name, module_name))
+        outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_native_src_paths(ctx.attr.ios_module_name, module_name), emit_debug, emit_release)
 
     # tablename.d.ts files
     outputs += get_sql_dts_paths(ctx.attr.sql_db_names, ctx.files.sql_srcs, module_name, module_directory)
@@ -606,7 +652,7 @@ def _get_files_output_paths(ctx, module_name, module_directory, localization_mod
 
     # ids.xml
     if enable_android:
-        outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_ids_xml_paths(module_name, ctx.file.ids_yaml))
+        outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_ids_xml_paths(module_name, ctx.file.ids_yaml), emit_debug, emit_release)
 
     # Strings.d.ts
     strings_json_srcs = ctx.files.strings_json_srcs
@@ -619,11 +665,11 @@ def _get_files_output_paths(ctx, module_name, module_directory, localization_mod
     if localization_mode == "external":
         # Android strings-xx.xml
         if enable_android:
-            outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_string_resource_paths(module_name, strings_json_srcs))
+            outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_string_resource_paths(module_name, strings_json_srcs), emit_debug, emit_release)
 
         # iOS Localizable.strings
         if enable_ios:
-            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_string_resource_paths(module_name, strings_json_srcs))
+            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_string_resource_paths(module_name, strings_json_srcs), emit_debug, emit_release)
 
     # res.d.ts
     outputs += get_resources_dts_paths(module_name, ctx.files.res)
@@ -632,9 +678,9 @@ def _get_files_output_paths(ctx, module_name, module_directory, localization_mod
         basenames = _extract_image_resources_basenames(ctx.files.res)
 
         if enable_android:
-            outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_image_resources_paths(module_name, basenames))
+            outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_image_resources_paths(module_name, basenames), emit_debug, emit_release)
         if enable_ios:
-            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_image_resources_paths(module_name, basenames))
+            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_image_resources_paths(module_name, basenames), emit_debug, emit_release)
         if enable_web:
             # Just debug for now
             renamed_resources = _extract_renamed_resources(ctx.files.res)
@@ -648,14 +694,16 @@ def _get_files_output_paths(ctx, module_name, module_directory, localization_mod
 
     if ctx.attr.single_file_codegen:
         if enable_android and ctx.attr.has_android_exports:
-            outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_generated_src(module_name))
+            outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_generated_src(module_name), emit_debug, emit_release)
         if enable_ios and ctx.attr.has_ios_exports:
-            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_src(ctx.attr.ios_module_name, ctx.attr.ios_language))
-            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_api_src(ctx.attr.ios_module_name, ctx.attr.ios_language))
+            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_src(ctx.attr.ios_module_name, ctx.attr.ios_language), emit_debug, emit_release)
+            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_api_src(ctx.attr.ios_module_name, ctx.attr.ios_language), emit_debug, emit_release)
 
-        # C++ is always generated (shared cross-platform infrastructure).
-        # Suppressed only when code coverage is enabled (debug-only mode).
-        if not code_coverage:
+        # C++ is always generated (shared cross-platform infrastructure) because it outputs
+        # to the release path regardless of --output-target. Suppressed when the compiler
+        # is invoked with --output-target debug (code coverage, or output_flavor=debug),
+        # since that tells the compiler to skip the release output path entirely.
+        if emit_release:
             outputs += _get_cpp_generated_src(module_name)
 
     # Add code coverage output file
@@ -664,7 +712,7 @@ def _get_files_output_paths(ctx, module_name, module_directory, localization_mod
 
     return outputs
 
-def _get_directories_output_paths(ctx, code_coverage, enable_android = True, enable_ios = True):
+def _get_directories_output_paths(ctx, code_coverage, enable_android = True, enable_ios = True, emit_debug = True, emit_release = True):
     outputs = []
 
     # When code coverage is enabled, the compiler only outputs debug builds
@@ -674,7 +722,7 @@ def _get_directories_output_paths(ctx, code_coverage, enable_android = True, ena
     # Android source maps.
     # Note: sourcemap directories are not created when code coverage is enabled
     if enable_android and not code_coverage:
-        outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_source_map_dir())
+        outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_source_map_dir(), emit_debug, emit_release)
 
     # iOS generated sources. Debug is always generated
     ios_module_name = ctx.attr.ios_module_name
@@ -682,22 +730,23 @@ def _get_directories_output_paths(ctx, code_coverage, enable_android = True, ena
     if not ctx.attr.single_file_codegen:
         # Android generated sources. Debug is always generated (only if module has Android exports)
         if enable_android and ctx.attr.has_android_exports:
-            outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_generated_src_dir())
+            outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_generated_src_dir(), emit_debug, emit_release)
 
         # iOS generated sources (only if module has iOS exports)
         if enable_ios and ctx.attr.has_ios_exports:
-            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_src_dir(ios_module_name))
-            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_api_src_dir(ios_module_name))
+            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_src_dir(ios_module_name), emit_debug, emit_release)
+            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_api_src_dir(ios_module_name), emit_debug, emit_release)
 
-        # C++ is always generated (shared cross-platform infrastructure).
-        # Suppressed only when code coverage is enabled (debug-only mode).
-        if not code_coverage:
+        # C++ is always generated (shared cross-platform infrastructure) because it outputs
+        # to the release path regardless of --output-target. Suppressed when the compiler
+        # is invoked with --output-target debug (code coverage, or output_flavor=debug).
+        if emit_release:
             outputs.append(_get_cpp_generated_src_dir())
 
     # iOS source maps.
     # Note: sourcemap directories are not created when code coverage is enabled
     if enable_ios and not code_coverage:
-        outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_source_map_dir())
+        outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_source_map_dir(), emit_debug, emit_release)
 
     # iOS SQL assets used by Buck
     if enable_ios and ctx.attr.sql_db_names:
@@ -779,13 +828,21 @@ def _get_web_generated_resource_paths(module_name, srcs):
 
     return out
 
-def _append_debug_and_maybe_release(lst, output_target, items_lst):
-    """ Append the debug and possible release item to the list.
+def _append_debug_and_maybe_release(lst, output_target, items_lst, emit_debug = True, emit_release = True):
+    """ Append the debug and possibly release items to the list, filtered by the current build flavor.
 
     Args:
         lst: The list to append to
-        output_target: The output target to append to. Can be "debug" or "release"
-        items_lst: Array[2]: The array of size 2 where lst[0] is the debug item and lst[1] is the release item
+        output_target: The module's per-platform output_target attr ("debug" or "release").
+            This is a module-capability value (see _generate_module_definition and
+            BundleManager.parseOutputTarget in the compiler), not a build-flavor value.
+            A "debug" module can never produce release artifacts, so release is never appended.
+        items_lst: Array[2]: lst[0] is the debug item and lst[1] is the release item
+        emit_debug: Whether the current build flavor wants debug artifacts. Overridden to True
+            for debug-only modules (output_target != "release") so the build still produces
+            artifacts when a flavor=release filter is applied globally to a mix of modules.
+        emit_release: Whether the current build flavor wants release artifacts. Has no effect
+            on debug-only modules — they cannot emit release regardless.
 
     Returns:
         The new list with appended item(s)
@@ -804,8 +861,10 @@ def _append_debug_and_maybe_release(lst, output_target, items_lst):
 
     debug_item, release_item = items_lst
 
-    lst = concat(lst, debug_item)
-    if output_target == "release":
+    # Debug-only modules must always emit debug — there's no release variant to fall back to.
+    if emit_debug or output_target != "release":
+        lst = concat(lst, debug_item)
+    if emit_release and output_target == "release":
         lst = concat(lst, release_item)
     return lst
 
@@ -1147,7 +1206,7 @@ def _declare_files(ctx, paths):
 def _declare_directories(ctx, paths):
     return [ctx.actions.declare_directory(path) for path in paths]
 
-def _prepare_arguments(args, log_level, localization_mode, js_bytecode_format, config_yaml_file, explicit_input_list_file, module_name, base_output_dir, disable_downloadable_assets, shell_env, prepared_upload_artifact_file, inline_assets, additional_copts, enable_web, disable_minify_web, code_coverage, enable_android = True, enable_ios = True):
+def _prepare_arguments(args, log_level, localization_mode, js_bytecode_format, config_yaml_file, explicit_input_list_file, module_name, base_output_dir, disable_downloadable_assets, shell_env, prepared_upload_artifact_file, inline_assets, additional_copts, enable_web, disable_minify_web, code_coverage, enable_android = True, enable_ios = True, emit_debug = True, emit_release = True, compiler_output_target = "all"):
     """ Prepare arguments for the Valdi compiler invocation. """
 
     args.use_param_file("@%s", use_always = True)
@@ -1177,6 +1236,8 @@ def _prepare_arguments(args, log_level, localization_mode, js_bytecode_format, c
 
         # Force compiler to only generate debug outputs when code coverage is enabled
         args.add("--output-target", "debug")
+    elif compiler_output_target != "all":
+        args.add("--output-target", compiler_output_target)
 
     # args.add("--ts-skip-verifying-imports")
     args.add("--disable-disk-cache")
@@ -1270,31 +1331,31 @@ def _prepare_arguments(args, log_level, localization_mode, js_bytecode_format, c
 
     return args
 
-def _compress_generated_android_srcs(ctx, module_name, outputs, code_coverage):
+def _compress_generated_android_srcs(ctx, module_name, outputs, effective_android_output_target):
     """ Compress the generated Android sources into .srcjar files.
 
     Args:
         ctx: The context of the current rule invocation
         module_name: The name of the module to compile
         outputs(List[File]): The list of outputs produce by the Valdi compiler
-        code_coverage: Whether code coverage is enabled (only debug outputs when true)
+        effective_android_output_target: The set of variants declared for Android — a subset
+            of {"debug", "release"}. Must match what _append_debug_and_maybe_release declared
+            for Android on this module so the srcjar zips find their source directories.
     """
     result = []
 
     debug_path, release_path = _get_android_generated_src_dir()
     directories = [f for f in outputs if f.is_directory]
 
-    # Debug directory is always present
-    debug_dir = [d for d in directories if d.path.endswith(debug_path)][0]
+    if "debug" in effective_android_output_target:
+        debug_dir = [d for d in directories if d.path.endswith(debug_path)][0]
 
-    # TODO: perhaps we should let compiler generate srcjars for us?
-    debug_srcjar = ctx.actions.declare_file("{}.debug.srcjar".format(module_name))
-    _zip_dir(ctx, debug_dir, debug_srcjar)
-    result.append(debug_srcjar)
+        # TODO: perhaps we should let compiler generate srcjars for us?
+        debug_srcjar = ctx.actions.declare_file("{}.debug.srcjar".format(module_name))
+        _zip_dir(ctx, debug_dir, debug_srcjar)
+        result.append(debug_srcjar)
 
-    # Only create release srcjar if we're building for release AND code coverage is not enabled
-    # (code coverage only generates debug outputs)
-    if ctx.attr.android_output_target == "release" and not code_coverage:
+    if "release" in effective_android_output_target:
         release_dir = [d for d in directories if d.path.endswith(release_path)][0]
         release_srcjar = ctx.actions.declare_file("{}.release.srcjar".format(module_name))
         _zip_dir(ctx, release_dir, release_srcjar)
@@ -1327,11 +1388,16 @@ def _generate_module_definition(ctx, name):
     dependencies_str = "\n".join(["  - {}".format(dep[ValdiModuleInfo].name) for dep in attr.deps])
 
     # When global code coverage is enabled, force ALL modules (even those with disable_code_coverage=true)
-    # to build in debug mode to maintain dependency consistency
+    # to build in debug mode to maintain dependency consistency.
+    # output_flavor="debug" follows the same rule: forcing the module.yaml to declare debug
+    # turns every module into ModuleOutputTarget.debugOnly for the compiler's dependency-
+    # verification pass, avoiding cross-module release-ready checks when the whole build is
+    # debug-flavored.
     # Check if code coverage is enabled via `bazel coverage` command or explicit flag
     code_coverage = ctx.configuration.coverage_enabled or ctx.attr.code_coverage[BuildSettingInfo].value
-    android_output_target = "debug" if code_coverage else attr.android_output_target
-    ios_output_target = "debug" if code_coverage else attr.ios_output_target
+    force_debug_yaml = code_coverage or ctx.attr.output_flavor[BuildSettingInfo].value == "debug"
+    android_output_target = "debug" if force_debug_yaml else attr.android_output_target
+    ios_output_target = "debug" if force_debug_yaml else attr.ios_output_target
 
     ios_language_str = ",".join(attr.ios_language)
 
@@ -1430,16 +1496,24 @@ def _resolve_module_yaml(ctx, module_name):
     ctx.actions.write(output = module_yaml, content = module_definition)
     return (module_yaml, module_definition)
 
-def _create_valdi_module_info(ctx, module_name, module_yaml, module_definition, outputs, code_coverage, enable_android = True, enable_ios = True):
+def _create_valdi_module_info(ctx, module_name, module_yaml, module_definition, outputs, code_coverage, enable_android = True, enable_ios = True, emit_debug = True, emit_release = True):
     in_declarations = _extract_dts_files(_get_compiled_srcs(ctx))
     out_declarations = _extract_dts_files(outputs)
     dumped_compilation_metadata = _extract_dumped_compilation_metadata(outputs)
     ios_module_name = ctx.attr.ios_module_name
     has_valdimodule = _will_generate_valdimodule(ctx)
 
-    # When code coverage is enabled, only debug outputs are generated (no release)
-    is_android_release = ctx.attr.android_output_target == "release" and not code_coverage
-    is_ios_release = ctx.attr.ios_output_target == "release" and not code_coverage
+    # A field is populated iff _append_debug_and_maybe_release declared its output above.
+    # Debug-only modules always populate debug (module-level floor); release is populated
+    # only for release-ready modules when the current flavor wants release.
+    emit_android_debug = emit_debug or ctx.attr.android_output_target != "release"
+    emit_android_release = emit_release and ctx.attr.android_output_target == "release" and not code_coverage
+    emit_ios_debug = emit_debug or ctx.attr.ios_output_target != "release"
+    emit_ios_release = emit_release and ctx.attr.ios_output_target == "release" and not code_coverage
+
+    # Kept for the fields below that only gate on "release is available at all".
+    is_android_release = emit_android_release
+    is_ios_release = emit_ios_release
 
     # The order matter here. It should always starts with module_yaml
     direct_intermediates = [module_yaml] + in_declarations + out_declarations + ctx.files.legacy_style_srcs + dumped_compilation_metadata
@@ -1463,48 +1537,48 @@ def _create_valdi_module_info(ctx, module_name, module_yaml, module_definition, 
         # Android outputs
         android_debug_resource_files = depset(_extract_android_resources("debug", outputs)),
         android_release_resource_files = depset(_extract_android_resources("release", outputs)),
-        android_debug_valdimodule = _extract_valdi_module_android("debug", module_name, outputs) if has_valdimodule and enable_android else None,
+        android_debug_valdimodule = _extract_valdi_module_android("debug", module_name, outputs) if has_valdimodule and enable_android and emit_android_debug else None,
         android_release_valdimodule = _extract_valdi_module_android("release", module_name, outputs) if has_valdimodule and is_android_release and enable_android else None,
-        android_debug_srcjar = _extract_android_srcjar("debug", module_name, single_file_codegen, outputs) if ctx.attr.has_android_exports and enable_android else None,
+        android_debug_srcjar = _extract_android_srcjar("debug", module_name, single_file_codegen, outputs) if ctx.attr.has_android_exports and enable_android and emit_android_debug else None,
         android_release_srcjar = _extract_android_srcjar("release", module_name, single_file_codegen, outputs) if is_android_release and ctx.attr.has_android_exports and enable_android else None,
-        android_debug_nativesrc = _extract_android_native_srcs("debug", module_name, outputs) if ctx.attr.has_android_exports and enable_android else None,
+        android_debug_nativesrc = _extract_android_native_srcs("debug", module_name, outputs) if ctx.attr.has_android_exports and enable_android and emit_android_debug else None,
         android_release_nativesrc = _extract_android_native_srcs("release", module_name, outputs) if is_android_release and ctx.attr.has_android_exports and enable_android else None,
-        android_debug_sourcemaps = _extract_android_debug_sourcemaps(module_name, outputs) if has_valdimodule and not code_coverage and enable_android else None,
-        android_debug_sourcemap_archive = _extract_android_sourcemap_archive("debug", outputs) if has_valdimodule and not code_coverage and enable_android else None,
-        android_release_sourcemap_archive = _extract_android_sourcemap_archive("release", outputs) if has_valdimodule and not code_coverage and enable_android else None,
+        android_debug_sourcemaps = _extract_android_debug_sourcemaps(module_name, outputs) if has_valdimodule and not code_coverage and enable_android and emit_android_debug else None,
+        android_debug_sourcemap_archive = _extract_android_sourcemap_archive("debug", outputs) if has_valdimodule and not code_coverage and enable_android and emit_android_debug else None,
+        android_release_sourcemap_archive = _extract_android_sourcemap_archive("release", outputs) if has_valdimodule and not code_coverage and enable_android and emit_android_release else None,
 
         # iOS outputs
         ios_module_name = ios_module_name,
-        ios_debug_valdimodule = _extract_valdi_module_ios("debug", module_name, outputs) if has_valdimodule and enable_ios else None,
+        ios_debug_valdimodule = _extract_valdi_module_ios("debug", module_name, outputs) if has_valdimodule and enable_ios and emit_ios_debug else None,
         ios_release_valdimodule = _extract_valdi_module_ios("release", module_name, outputs) if has_valdimodule and is_ios_release and enable_ios else None,
         ios_debug_resource_files = depset(_extract_ios_unstructured_resources("debug", outputs)),
         ios_release_resource_files = depset(_extract_ios_unstructured_resources("release", outputs)),
         ios_debug_bundle_resources = depset(_extract_ios_resource_bundles(module_name, "debug", outputs)),
         ios_release_bundle_resources = depset(_extract_ios_resource_bundles(module_name, "release", outputs)),
-        ios_debug_generated_hdrs = _extract_ios_generated_hdrs("debug", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios else None,
-        ios_debug_generated_srcs = _extract_ios_generated_srcs("debug", outputs, ios_module_name, single_file_codegen, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios else None,
-        ios_release_generated_hdrs = _extract_ios_generated_hdrs("release", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios else None,
-        ios_release_generated_srcs = _extract_ios_generated_srcs("release", outputs, ios_module_name, single_file_codegen, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios else None,
-        ios_debug_api_generated_hdrs = _extract_ios_api_generated_hdrs("debug", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios else None,
-        ios_debug_api_generated_srcs = _extract_ios_api_generated_srcs("debug", outputs, ios_module_name, single_file_codegen, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios else None,
-        ios_release_api_generated_hdrs = _extract_ios_api_generated_hdrs("release", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios else None,
-        ios_release_api_generated_srcs = _extract_ios_api_generated_srcs("release", outputs, ios_module_name, single_file_codegen, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios else None,
-        ios_debug_generated_swift_srcs = _extract_ios_generated_swift_srcs("debug", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios else None,
-        ios_release_generated_swift_srcs = _extract_ios_generated_swift_srcs("release", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios else None,
-        ios_debug_api_generated_swift_srcs = _extract_ios_api_generated_swift_srcs("debug", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios else None,
-        ios_release_api_generated_swift_srcs = _extract_ios_api_generated_swift_srcs("release", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios else None,
-        ios_debug_nativesrc = _extract_ios_native_srcs("debug", ios_module_name, module_name, outputs) if ctx.attr.has_ios_exports and enable_ios else None,
+        ios_debug_generated_hdrs = _extract_ios_generated_hdrs("debug", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
+        ios_debug_generated_srcs = _extract_ios_generated_srcs("debug", outputs, ios_module_name, single_file_codegen, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
+        ios_release_generated_hdrs = _extract_ios_generated_hdrs("release", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios and emit_ios_release else None,
+        ios_release_generated_srcs = _extract_ios_generated_srcs("release", outputs, ios_module_name, single_file_codegen, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios and emit_ios_release else None,
+        ios_debug_api_generated_hdrs = _extract_ios_api_generated_hdrs("debug", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
+        ios_debug_api_generated_srcs = _extract_ios_api_generated_srcs("debug", outputs, ios_module_name, single_file_codegen, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
+        ios_release_api_generated_hdrs = _extract_ios_api_generated_hdrs("release", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios and emit_ios_release else None,
+        ios_release_api_generated_srcs = _extract_ios_api_generated_srcs("release", outputs, ios_module_name, single_file_codegen, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios and emit_ios_release else None,
+        ios_debug_generated_swift_srcs = _extract_ios_generated_swift_srcs("debug", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
+        ios_release_generated_swift_srcs = _extract_ios_generated_swift_srcs("release", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios and emit_ios_release else None,
+        ios_debug_api_generated_swift_srcs = _extract_ios_api_generated_swift_srcs("debug", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
+        ios_release_api_generated_swift_srcs = _extract_ios_api_generated_swift_srcs("release", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios and emit_ios_release else None,
+        ios_debug_nativesrc = _extract_ios_native_srcs("debug", ios_module_name, module_name, outputs) if ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
         ios_release_nativesrc = _extract_ios_native_srcs("release", ios_module_name, module_name, outputs) if is_ios_release and ctx.attr.has_ios_exports and enable_ios else None,
-        ios_debug_sourcemaps = _extract_ios_debug_sourcemaps(module_name, outputs) if has_valdimodule and not code_coverage and enable_ios else None,
-        ios_debug_sourcemap_archive = _extract_ios_sourcemap_archive("debug", outputs) if has_valdimodule and not code_coverage and enable_ios else None,
-        ios_release_sourcemap_archive = _extract_ios_sourcemap_archive("release", outputs) if has_valdimodule and not code_coverage and enable_ios else None,
+        ios_debug_sourcemaps = _extract_ios_debug_sourcemaps(module_name, outputs) if has_valdimodule and not code_coverage and enable_ios and emit_ios_debug else None,
+        ios_debug_sourcemap_archive = _extract_ios_sourcemap_archive("debug", outputs) if has_valdimodule and not code_coverage and enable_ios and emit_ios_debug else None,
+        ios_release_sourcemap_archive = _extract_ios_sourcemap_archive("release", outputs) if has_valdimodule and not code_coverage and enable_ios and emit_ios_release else None,
         ios_sql_assets = _extract_ios_sql_assets(ios_module_name, outputs),
         ios_dependency_data = _extract_ios_dependency_data(outputs),
 
-        # C++ outputs (always in release configuration)
-        # However, when code coverage is enabled (--output-target debug), C++ outputs are not generated
-        cpp_srcs = _extract_cpp_generated_srcs(outputs, module_name, single_file_codegen) if not code_coverage else None,
-        cpp_hdrs = _extract_cpp_generated_hdrs(outputs, module_name, single_file_codegen) if not code_coverage else None,
+        # C++ outputs (always in release configuration). Not generated when the compiler is
+        # invoked with --output-target debug (code coverage, or output_flavor=debug).
+        cpp_srcs = _extract_cpp_generated_srcs(outputs, module_name, single_file_codegen) if emit_release else None,
+        cpp_hdrs = _extract_cpp_generated_hdrs(outputs, module_name, single_file_codegen) if emit_release else None,
 
         # web outputs
         protodecl_srcs = ctx.files.protodecl_srcs,

@@ -232,6 +232,37 @@ config_setting(
     },
 )
 
+# Flag to restrict the Valdi compiler to a single build flavor (debug or release).
+# Default is "all" (generate both, subject to each module's own output_target).
+# Set to "debug" for debug-only builds (e.g. local dev) or "release" for release-only
+# builds to skip generating the unused variant and save compile time.
+# Modules whose output_target is "debug" always emit debug regardless of this flag
+# (there is no release variant to emit for them).
+string_flag(
+    name = "output_flavor",
+    build_setting_default = "all",
+    values = [
+        "all",
+        "debug",
+        "release",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "output_flavor_debug",
+    flag_values = {
+        ":output_flavor": "debug",
+    },
+)
+
+config_setting(
+    name = "output_flavor_release",
+    flag_values = {
+        ":output_flavor": "release",
+    },
+)
+
 # Create an exhaustive set of configurations because Bazel doesn't support nested selects.
 # Not having nested selects means we have to list all possible conditions in a single flat select.
 # User by valdi_module.bzl to conditionally include apple_resource_bundles in the Valdi objc library.
