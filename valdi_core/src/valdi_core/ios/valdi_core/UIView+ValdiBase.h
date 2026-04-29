@@ -28,6 +28,13 @@ NS_ASSUME_NONNULL_BEGIN
  */
 - (BOOL)willEnqueueIntoValdiPool;
 
+/**
+ Resets any CALayer state that must not persist across view pool re-use.
+ Called unconditionally by the Valdi pool infrastructure on every recycled
+ view, regardless of which willEnqueueIntoValdiPool override the view has.
+ */
+- (void)valdi_prepareForPoolReuse;
+
 - (void)scrollSpecsDidChangeWithContentOffset:(CGPoint)contentOffset
                                   contentSize:(CGSize)contentSize
                                      animated:(BOOL)animated;

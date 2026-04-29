@@ -28,6 +28,7 @@
 #import "valdi_core/SCValdiView.h"
 #import "valdi_core/SCValdiViewComponent.h"
 #import "valdi_core/UIView+ValdiObjects.h"
+#import "valdi_core/UIView+ValdiBase.h"
 
 #import "valdi_core/SCNValdiCoreAnimator+Private.h"
 
@@ -255,6 +256,8 @@ ViewTransaction::~ViewTransaction() = default;
         }
 
         if (allowRecycling) {
+            [uiView valdi_prepareForPoolReuse];
+
             if (uiView.layer.animationKeys.count) {
                 [uiView.layer removeAllAnimations];
                 // If we had animations, the CALayer is going to be dirty and re-using

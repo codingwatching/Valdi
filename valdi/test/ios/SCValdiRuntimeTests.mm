@@ -18,6 +18,7 @@
 #import "valdi_core/cpp/Threading/GCDDispatchQueue.hpp"
 #import "valdi_core/SCValdiScrollView.h"
 #import "valdi_core/SCValdiRootView.h"
+#import "valdi_core/UIView+ValdiBase.h"
 
 #import <SCCValdiTest/SCCValdiTest.h>
 #import <SCCValdiTestTypes/SCCValdiTestTypes.h>
@@ -639,6 +640,28 @@
     });
 
     [self waitForExpectations:@[expectation] timeout:5.0];
+}
+
+- (void)testPrepareForPoolReuseResetsTransform
+{
+    // valdi_prepareForPoolReuse is called unconditionally by the pool infrastructure
+    // on every recycled view. Verify it resets a stale CALayer transform — the
+    // scenario that occurs when a transform animation is cancelled mid-flight:
+    // the Valdi animation system sets the model value to the target before the
+    // CAAnimation starts, so cancellation snaps the layer to that model value.
+    UIView *view = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 200, 44)];
+    view.layer.transform = CATransform3DMakeTranslation(-216, 0, 0);
+    XCTAssertFalse(CATransform3DIsIdentity(view.layer.transform));
+
+    [view valdi_prepareForPoolReuse];
+
+    XCTAssertTrue(CATransform3DIsIdentity(view.layer.transform));
+}
+
+- (void)testLabelAllowsPoolReentry
+{
+    SCValdiLabel *label = [[SCValdiLabel alloc] initWithFrame:CGRectMake(0, 0, 200, 44)];
+    XCTAssertTrue([label willEnqueueIntoValdiPool]);
 }
 
 @end
