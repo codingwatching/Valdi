@@ -25,6 +25,8 @@ import com.snap.valdi.utils.Disposable
 import com.snap.valdi.utils.LoadCompletion
 import com.snap.valdi.utils.runOnMainThreadIfNeeded
 import com.snap.valdi.views.ValdiEditText
+import com.snap.valdi.views.TextViewUtils
+import com.snap.valdi.views.ValdiTextView
 import com.snap.valdi.views.touches.AttributedTextTapGestureRecognizer
 import kotlin.math.max
 
@@ -125,6 +127,10 @@ class TextViewHelper(private val view: TextView,
     private lateinit var initialGradientSize: Size
 
     private var fontLoadDisposables: MutableMap<FontDescriptor, Disposable>? = null
+    private var overlayAttributedTextSpannable: Spannable? = null
+    private var parsedAttributedTextSource: AttributedText? = null
+    private var parsedAttributedText: RichTextConverter.ParsedAttributedText? = null
+    private var overlayLayoutCache: RichTextConverter.OverlayLayoutCache? = null
 
     fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         updateTextAttributes()
@@ -250,18 +256,81 @@ class TextViewHelper(private val view: TextView,
     fun convertAttributedText(text: AttributedText): Spannable {
         val fontAttributes = this.fontAttributes ?: defaultAttributes
         val density = view.resources.displayMetrics.density
-        return textConverter.convert(text, fontAttributes, this, disableTextReplacement, density)
+        return textConverter.convert(
+            attributedText = text,
+            startingAttributes = fontAttributes,
+            missingFontsTracker = this,
+            disableTextReplacement = disableTextReplacement,
+            density = density,
+        )
     }
 
-    fun drawOnTopAttributedText(canvas: Canvas, layout: Layout, text: AttributedText) {
+    fun convertOverlayAttributedText(text: AttributedText): Spannable {
         val fontAttributes = this.fontAttributes ?: defaultAttributes
-        textConverter.drawOnTop(canvas, layout, text, fontAttributes, this)
+        val density = view.resources.displayMetrics.density
+        return textConverter.convert(
+            text,
+            fontAttributes,
+            this,
+            disableTextReplacement = disableTextReplacement,
+            suppressAnimatedBase = false,
+            renderMode = FontAttributes.RenderMode.OVERLAY,
+            density = density,
+        )
+    }
+
+    fun drawOnTopAttributedText(canvas: Canvas, layout: Layout, text: AttributedText): Boolean {
+        val overlaySpannable = overlayAttributedTextSpannable ?: convertOverlayAttributedText(text).also {
+            overlayAttributedTextSpannable = it
+        }
+        val parsedText = if (parsedAttributedTextSource === text) {
+            parsedAttributedText
+        } else {
+            null
+        } ?: textConverter.parseAttributedText(text, this.fontAttributes ?: defaultAttributes).also {
+            parsedAttributedTextSource = text
+            parsedAttributedText = it
+        }
+        val cachedOverlayLayout = overlayLayoutCache
+        val currentBreakStrategy = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) view.breakStrategy else 0
+        val currentHyphenationFrequency = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) view.hyphenationFrequency else 0
+        val currentJustificationMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) view.justificationMode else 0
+        val overlayLayout = if (cachedOverlayLayout != null &&
+            cachedOverlayLayout.overlaySpannable === overlaySpannable &&
+            cachedOverlayLayout.width == layout.width &&
+            cachedOverlayLayout.alignment == layout.alignment &&
+            cachedOverlayLayout.lineSpacingExtra == view.lineSpacingExtra &&
+            cachedOverlayLayout.lineSpacingMultiplier == view.lineSpacingMultiplier &&
+            cachedOverlayLayout.includeFontPadding == view.includeFontPadding &&
+            cachedOverlayLayout.breakStrategy == currentBreakStrategy &&
+            cachedOverlayLayout.hyphenationFrequency == currentHyphenationFrequency &&
+            cachedOverlayLayout.justificationMode == currentJustificationMode &&
+            cachedOverlayLayout.textDirection == TextViewUtils.resolveTextDirectionHeuristic(view)
+        ) {
+            cachedOverlayLayout
+        } else {
+            textConverter.buildOverlayLayoutCache(layout, view, overlaySpannable)?.also {
+                if (cachedOverlayLayout !== it) {
+                    cachedOverlayLayout?.recycle()
+                }
+                overlayLayoutCache = it
+            }
+        } ?: return false
+
+        textConverter.drawOnTop(canvas, layout, overlayLayout, view, parsedText, this)
+        return true
     }
 
     private fun applyAttributedText(text: AttributedText) {
+        parsedAttributedTextSource = text
+        parsedAttributedText = textConverter.parseAttributedText(text, this.fontAttributes ?: defaultAttributes)
         val spannable = convertAttributedText(text)
+        overlayAttributedTextSpannable = null
+        clearOverlayLayoutCache()
         if (view is ValdiEditText) {
             view.setTextAndSelection(text, spannable)
+        } else if (view is ValdiTextView) {
+            view.setAttributedText(text, spannable)
         } else {
             view.text = SpannableString(spannable)
         }
@@ -274,6 +343,11 @@ class TextViewHelper(private val view: TextView,
         } else {
             addAttributedTextTapGestureRecognizer(spannable)
         }
+    }
+
+    internal fun clearOverlayLayoutCache() {
+        overlayLayoutCache?.recycle()
+        overlayLayoutCache = null
     }
 
     // Apply all known specified text rendering attributes

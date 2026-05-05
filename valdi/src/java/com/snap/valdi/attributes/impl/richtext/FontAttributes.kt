@@ -11,6 +11,7 @@ import android.text.style.AlignmentSpan
 import android.text.style.ClickableSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.MetricAffectingSpan
+import android.text.style.ReplacementSpan
 import android.text.style.StrikethroughSpan
 import android.text.style.UnderlineSpan
 import android.util.TypedValue
@@ -29,6 +30,41 @@ class CustomTypefaceSpan(val typeface: Typeface) : MetricAffectingSpan() {
     }
 }
 
+class InvisibleReplacementSpan : ReplacementSpan() {
+    override fun getSize(
+        paint: Paint,
+        text: CharSequence?,
+        start: Int,
+        end: Int,
+        fm: Paint.FontMetricsInt?
+    ): Int {
+        if (fm != null) {
+            paint.getFontMetricsInt(fm)
+        }
+
+        return if (text != null) {
+            kotlin.math.ceil(paint.measureText(text, start, end).toDouble()).toInt()
+        } else {
+            0
+        }
+    }
+
+    override fun draw(
+        canvas: android.graphics.Canvas,
+        text: CharSequence?,
+        start: Int,
+        end: Int,
+        x: Float,
+        top: Int,
+        y: Int,
+        bottom: Int,
+        paint: Paint
+    ) {
+    }
+}
+
+class InvisibleForegroundColorSpan : ForegroundColorSpan(Color.TRANSPARENT)
+
 data class FontAttributes(
     var textDecoration: TextDecoration?,
     var fontSize: Float,
@@ -45,6 +81,10 @@ data class FontAttributes(
     var outlineWidth: Float,
     var animationTransform: TextAnimationTransform? = null
 ) {
+    enum class RenderMode {
+        BASE,
+        OVERLAY,
+    }
 
     companion object {
         val default = FontAttributes(
@@ -86,6 +126,8 @@ data class FontAttributes(
     fun enumerateSpans(fontManager: FontManager,
                        missingFontsTracker: MissingFontsTracker,
                        disableTextReplacement: Boolean = false,
+                       renderMode: RenderMode = RenderMode.BASE,
+                       suppressAnimatedBase: Boolean = false,
                        closure: (Any) -> Unit) {
         closure(TextSizeSpan(resolveFontSize(fontManager.context)))
 
@@ -109,9 +151,32 @@ data class FontAttributes(
             closure(CustomTypefaceSpan(typeface))
         }
 
-        // forceOutline renders transparent text for non-outlined text, and gets us only the outlines
-        // this is then overriden in onDraw for ValdiEditText to overlay on top of text\
-        if (!disableTextReplacement && outlineColor != null && outlineWidth > 0) {
+        if (animationTransform != null) {
+            val shouldAnimateInOverlay = isActiveAnimationTransform(animationTransform)
+            if (renderMode == RenderMode.OVERLAY) {
+                if (!disableTextReplacement && outlineColor != null && outlineWidth > 0) {
+                    closure(OutlineReplacementSpan(color, outlineColor!!, outlineWidth))
+                } else {
+                    closure(ForegroundColorSpan(color))
+                }
+            } else if (shouldAnimateInOverlay && suppressAnimatedBase) {
+                if (disableTextReplacement || outlineColor == null || outlineWidth <= 0f) {
+                    closure(InvisibleForegroundColorSpan())
+                } else {
+                    closure(InvisibleReplacementSpan())
+                }
+            } else if (!disableTextReplacement && outlineColor != null && outlineWidth > 0) {
+                closure(OutlineReplacementSpan(color, outlineColor!!, outlineWidth))
+            } else {
+                closure(ForegroundColorSpan(color))
+            }
+        } else if (renderMode == RenderMode.OVERLAY) {
+            if (!disableTextReplacement && outlineColor != null && outlineWidth > 0) {
+                closure(OutlineReplacementSpan(color, outlineColor!!, outlineWidth))
+            } else {
+                closure(ForegroundColorSpan(color))
+            }
+        } else if (!disableTextReplacement && outlineColor != null && outlineWidth > 0) {
             closure(OutlineReplacementSpan(color, outlineColor!!, outlineWidth))
         } else {
             closure(ForegroundColorSpan(color))

@@ -32,6 +32,8 @@
 
 static BOOL SCValdiAnimationRangeHasVisibleTransform(SCValdiTextViewAnimationRange *animationRange)
 {
+    // TODO(CREATE-86642): Define animation-state semantics once in shared Valdi code
+    // (or bridge explicit state from TS) so Android/iOS stop duplicating thresholds.
     return fabs(animationRange.translationY) > DBL_EPSILON ||
            fabs(animationRange.scale - 1.0) > DBL_EPSILON ||
            fabs(animationRange.opacity - 1.0) > DBL_EPSILON;

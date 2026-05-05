@@ -73,6 +73,14 @@ fun isRenderableAnimationTransform(animationTransform: TextAnimationTransform?):
     // TODO(CREATE-86642): Define animation-state semantics once in shared Valdi code
     // (or bridge explicit state from TS) so Android/iOS stop duplicating thresholds.
     return animationTransform != null &&
+        animationTransform.opacity > 0.01f &&
+        (abs(animationTransform.translationY) > 0.01f ||
+            abs(animationTransform.scale - 1f) > 0.01f ||
+            animationTransform.opacity < 0.999f)
+}
+
+fun isActiveAnimationTransform(animationTransform: TextAnimationTransform?): Boolean {
+    return animationTransform != null &&
         (abs(animationTransform.translationY) > 0.01f ||
             abs(animationTransform.scale - 1f) > 0.01f ||
             abs(animationTransform.opacity - 1f) > 0.001f)
@@ -81,6 +89,15 @@ fun isRenderableAnimationTransform(animationTransform: TextAnimationTransform?):
 fun AttributedText.hasRenderableAnimationTransform(): Boolean {
     for (index in 0 until getPartsSize()) {
         if (isRenderableAnimationTransform(getAnimationTransformAtIndex(index))) {
+            return true
+        }
+    }
+    return false
+}
+
+fun AttributedText.hasActiveAnimationTransform(): Boolean {
+    for (index in 0 until getPartsSize()) {
+        if (isActiveAnimationTransform(getAnimationTransformAtIndex(index))) {
             return true
         }
     }
