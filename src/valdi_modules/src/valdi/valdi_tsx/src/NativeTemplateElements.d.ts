@@ -1460,7 +1460,7 @@ export interface CommonTextAttributes {
    * - 2) required: the size of the font
    * - 3) optional: the scaling type (or 'unscaled' for no scaling)
    * - 4) optional: the maximum size of the font after scaling
-   * @example: 'AvenirNext-Bold 16 unscaled 16'
+   * @example: 'Montserrat-Bold 16 unscaled 16'
    * @default: 'system 12'
    */
   font?: string;
