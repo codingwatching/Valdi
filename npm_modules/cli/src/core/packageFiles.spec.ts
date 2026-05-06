@@ -21,7 +21,7 @@ describe('npm package contents', () => {
 
   it('includes .metadata templates for bootstrap config', () => {
     expect(packedFiles).toContain('.metadata/config.yaml.template');
-    expect(packedFiles).toContain('.metadata/WORKSPACE.template');
+    expect(packedFiles).toContain('.metadata/MODULE.bazel.template');
   });
 
   it('includes .bootstrap templates for project scaffolding', () => {

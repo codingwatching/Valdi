@@ -31,7 +31,7 @@ export const ALL_ARCHITECTURES: Architecture[] = [Architecture.ARMV7, Architectu
 
 // Relative path starts at .metadata
 export enum TEMPLATE_BASE_PATHS {
-  WORKSPACE = 'WORKSPACE.template',
+  MODULE_BAZEL = 'MODULE.bazel.template',
   BAZEL_RC = '.bazelrc.template',
   BAZEL_VERSION = '.bazelversion.template',
   USER_CONFIG = 'config.yaml.template',
