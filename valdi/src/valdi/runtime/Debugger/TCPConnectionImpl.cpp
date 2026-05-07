@@ -78,6 +78,9 @@ void TCPConnectionImpl::lockFreeDoSend() {
                                  }
 
                                  std::lock_guard<Mutex> guard(strongSelf->_mutex);
+                                 if (strongSelf->_closed) {
+                                     return;
+                                 }
                                  strongSelf->_pendingPackets.pop_front();
                                  strongSelf->lockFreeDoSend();
                              });
@@ -157,7 +160,13 @@ void TCPConnectionImpl::doRead() {
             if (ec.failed()) {
                 strongSelf->close(errorFromBoostError(ec));
             } else {
-                strongSelf->doRead();
+                {
+                    std::lock_guard<Mutex> guard(strongSelf->_mutex);
+                    if (strongSelf->_closed) {
+                        return;
+                    }
+                    strongSelf->doRead();
+                }
 
                 auto listener = strongSelf->getDataListener();
                 if (listener != nullptr) {
