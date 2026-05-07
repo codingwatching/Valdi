@@ -114,6 +114,8 @@ class ExplicitImageAssetsProcessor: CompilationProcessor {
             let imageInfo: ImageInfo
             if compilerConfig.generateTSResFiles {
                 imageInfo = ImageInfo(size: ImageSize(width: 0, height: 0))
+            } else if let cached = input.size {
+                imageInfo = ImageInfo(size: ImageSize(width: cached.width, height: cached.height))
             } else {
                 let info = try getImageInfo(item: selectedItem.item, inputURL: selectedItem.data)
                 imageInfo = ImageInfo(size: ImageSize(width: info.width, height: info.height))

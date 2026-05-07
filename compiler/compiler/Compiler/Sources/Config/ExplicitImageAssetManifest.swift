@@ -2,12 +2,20 @@
 
 import Foundation
 
+struct ExplicitImageAssetManifestSize: Codable {
+    let width: Int
+    let height: Int
+}
+
 struct ExplicitImageAssetManifestInput: Codable {
     let file: String
     let relativeProjectPath: String
     let filenamePattern: String
     let scale: Double
     let platform: Platform?
+    /// Pixel dimensions of the image, populated by `ValdiProcessImages` so that
+    /// `ValdiCompile` can skip the toolbox subprocess when reading the manifest.
+    let size: ExplicitImageAssetManifestSize?
 }
 
 struct ExplicitImageAssetManifestOutput: Codable {
@@ -39,7 +47,8 @@ extension ExplicitImageAssetManifestInput {
                                                relativeProjectPath: try relativeProjectPath.resolvingVariables(variables),
                                                filenamePattern: filenamePattern,
                                                scale: scale,
-                                               platform: platform)
+                                               platform: platform,
+                                               size: size)
     }
 }
 

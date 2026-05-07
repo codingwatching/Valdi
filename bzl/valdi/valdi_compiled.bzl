@@ -477,19 +477,23 @@ def _invoke_valdi_compiler(ctx, module_name, module_yaml, enable_android = True,
     else:
         compiler_output_target = "all"
 
-    args = _prepare_arguments(ctx.actions.args(), ctx.attr.log_level[BuildSettingInfo].value, localization_mode, js_bytecode_format, config_yaml_file, explicit_input_list_file, explicit_image_asset_manifest_file, module_name, base_output_dir, disable_downloadable_assets, ctx.configuration.default_shell_env, prepared_upload_artifact_file, ctx.attr.inline_assets, valdi_copts, enable_web, disable_minify_web, code_coverage, enable_android, enable_ios, emit_debug, emit_release, compiler_output_target)
-
-    compile_inputs = all_inputs + [config_yaml_file, explicit_input_list_file] + ([explicit_image_asset_manifest_file] if explicit_image_asset_manifest_file else [])
-
     #############
     # 5a. Optionally split image generation into a separate ValdiProcessImages action.
+    #     Registered before arg preparation so the manifest with embedded image sizes
+    #     can be passed to the compile action instead of the original manifest.
     if declared_processed_image_files:
-        _register_image_processing_action(
+        manifest_with_sizes_file = _register_image_processing_action(
             ctx = ctx,
             config_yaml_file = config_yaml_file,
             explicit_image_asset_manifest_file = explicit_image_asset_manifest_file,
             declared_output_files = declared_processed_image_files,
         )
+        explicit_image_asset_manifest_file = manifest_with_sizes_file
+
+    args = _prepare_arguments(ctx.actions.args(), ctx.attr.log_level[BuildSettingInfo].value, localization_mode, js_bytecode_format, config_yaml_file, explicit_input_list_file, explicit_image_asset_manifest_file, module_name, base_output_dir, disable_downloadable_assets, ctx.configuration.default_shell_env, prepared_upload_artifact_file, ctx.attr.inline_assets, valdi_copts, enable_web, disable_minify_web, code_coverage, enable_android, enable_ios, emit_debug, emit_release, compiler_output_target)
+
+    compile_inputs = all_inputs + [config_yaml_file, explicit_input_list_file] + ([explicit_image_asset_manifest_file] if explicit_image_asset_manifest_file else [])
+    if declared_processed_image_files:
         compile_inputs = compile_inputs + declared_processed_image_files
 
     #############
@@ -807,14 +811,21 @@ def _register_image_processing_action(ctx, config_yaml_file, explicit_image_asse
     non-image files change. The `--image-processing-only` mode in the
     compiler iterates the manifest directly without going through the
     pipeline, so it doesn't need them.
+
+    Returns the manifest-with-sizes file (a JSON copy of the manifest with pixel
+    dimensions embedded per input) so that ValdiCompile can skip the toolbox
+    subprocess during image identification.
     """
     args = ctx.actions.args()
     args.use_param_file("@%s", use_always = True)
     args.set_param_file_format("multiline")
 
+    manifest_with_sizes_file = ctx.actions.declare_file("{}_explicit_image_asset_manifest_with_sizes.json".format(ctx.label.name))
+
     args.add("--image-processing-only")
     args.add("--config", config_yaml_file)
     args.add("--explicit-image-asset-manifest", explicit_image_asset_manifest_file)
+    args.add("--image-asset-manifest-output", manifest_with_sizes_file)
     args.add("--log-level", ctx.attr.log_level[BuildSettingInfo].value)
 
     inputs = ctx.files.res + [config_yaml_file, explicit_image_asset_manifest_file]
@@ -822,7 +833,7 @@ def _register_image_processing_action(ctx, config_yaml_file, explicit_image_asse
     run_valdi_compiler(
         ctx = ctx,
         args = args,
-        outputs = declared_output_files,
+        outputs = declared_output_files + [manifest_with_sizes_file],
         inputs = inputs,
         mnemonic = "ValdiProcessImages",
         progress_message = "Processing image assets for: " + str(ctx.label),
@@ -833,7 +844,7 @@ def _register_image_processing_action(ctx, config_yaml_file, explicit_image_asse
         use_worker = False,
     )
 
-    return declared_output_files
+    return manifest_with_sizes_file
 
 def _declare_compiler_outputs(ctx, module_name, module_directory, localization_mode, enable_web, code_coverage, enable_android = True, enable_ios = True, emit_debug = True, emit_release = True):
     files_output_paths = _get_files_output_paths(ctx, module_name, module_directory, localization_mode, enable_web, code_coverage, enable_android, enable_ios, emit_debug, emit_release)

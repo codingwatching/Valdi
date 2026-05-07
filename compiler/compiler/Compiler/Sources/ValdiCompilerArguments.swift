@@ -205,6 +205,9 @@ struct ValdiCompilerArguments: ParsableCommand {
     @Option(help: "Path to where to store the compiler companion logs")
     var companionLogOutput: String?
 
+    @Option(help: "Path to write the updated image asset manifest with embedded image sizes. Used by --image-processing-only to produce the manifest for ValdiCompile.")
+    var imageAssetManifestOutput: String?
+
     @Option(help: "The list of image variants to include for each platform")
     var imageVariantsFilter: String?
 

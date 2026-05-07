@@ -565,7 +565,14 @@ class ValdiCompilerRunner {
                                                     fileManager: fileManager,
                                                     imageToolbox: imageToolbox,
                                                     imageConverter: imageConverter)
-        try generator.process(manifest: manifest, baseURL: baseUrl)
+        let updatedManifest = try generator.process(manifest: manifest, baseURL: baseUrl)
+
+        if let outputPath = arguments.imageAssetManifestOutput {
+            let data = try updatedManifest.toJSON(outputFormatting: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes],
+                                                  keyEncodingStrategy: .convertToSnakeCase)
+            try data.write(to: URL(fileURLWithPath: outputPath))
+        }
+
         return true
     }
 

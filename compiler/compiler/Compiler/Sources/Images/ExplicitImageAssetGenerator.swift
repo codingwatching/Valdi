@@ -31,13 +31,15 @@ final class ExplicitImageAssetGenerator {
         self.imageConverter = imageConverter
     }
 
-    func process(manifest: ExplicitImageAssetManifest, baseURL: URL) throws {
-        for asset in manifest.assets {
-            try processAsset(asset: asset, baseURL: baseURL)
-        }
+    /// Processes all assets in the manifest and returns an updated copy with pixel
+    /// dimensions embedded in each input entry so that `ValdiCompile` can skip the
+    /// toolbox subprocess entirely when reading image info.
+    func process(manifest: ExplicitImageAssetManifest, baseURL: URL) throws -> ExplicitImageAssetManifest {
+        let updatedAssets = try manifest.assets.map { try processAsset(asset: $0, baseURL: baseURL) }
+        return ExplicitImageAssetManifest(assets: updatedAssets)
     }
 
-    private func processAsset(asset: ExplicitImageAssetManifestAsset, baseURL: URL) throws {
+    private func processAsset(asset: ExplicitImageAssetManifestAsset, baseURL: URL) throws -> ExplicitImageAssetManifestAsset {
         if asset.assetName.lowercased() != asset.assetName {
             throw CompilerError("Invalid filename '\(asset.assetName)' for module '\(asset.moduleName)', image filenames must be lowercased")
         }
@@ -72,6 +74,28 @@ final class ExplicitImageAssetGenerator {
                 _ = try imageConverter.convert(imageInfo: bestImageInfo, filePath: bestInput.fileURL.path, outputFileURL: outputURL, conversionInfo: conversionInfo)
             }
         }
+
+        // Embed pixel dimensions for every input so ValdiCompile can skip the toolbox.
+        let updatedInputs = try asset.inputs.map { input -> ExplicitImageAssetManifestInput in
+            let fileURL = baseURL.appendingPathComponent(input.file)
+            let info = fileURL == bestInput.fileURL ? bestInfo : try imageToolbox.getInfo(inputPath: fileURL.path)
+            return ExplicitImageAssetManifestInput(
+                file: input.file,
+                relativeProjectPath: input.relativeProjectPath,
+                filenamePattern: input.filenamePattern,
+                scale: input.scale,
+                platform: input.platform,
+                size: ExplicitImageAssetManifestSize(width: info.width, height: info.height)
+            )
+        }
+
+        return ExplicitImageAssetManifestAsset(
+            moduleName: asset.moduleName,
+            assetName: asset.assetName,
+            relativeProjectAssetDirectoryPath: asset.relativeProjectAssetDirectoryPath,
+            inputs: updatedInputs,
+            outputs: asset.outputs
+        )
     }
 
     struct ResolvedInput {
