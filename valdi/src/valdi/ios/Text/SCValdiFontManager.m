@@ -85,7 +85,7 @@
             font = [UIFont boldSystemFontOfSize:fontSize];
         } else if ([fontName isEqualToString:@"system-italic"]) {
             font = [UIFont italicSystemFontOfSize:fontSize];
-        } else if (_fontLoader) {
+        } else if (_fontLoader && [UIFont fontWithName:fontName size:fontSize]) {
             if ([_fontLoader shouldBypassContextForLegibilityWeight]) {
                 font = [_fontLoader loadFontWithName:fontName fontSize:fontSize legibilityWeight:legibilityWeight];
             } else {
