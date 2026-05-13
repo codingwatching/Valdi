@@ -23,6 +23,7 @@ export { filter } from './operators/filter';
 export { switchMap } from './operators/switchMap';
 export { startWith } from './operators/startWith';
 export { distinctUntilChanged } from './operators/distinctUntilChanged';
+export { mergeWith } from './operators/mergeWith';
 
 export { combineLatest } from './observable/combineLatest';
 export { of } from './observable/of';
