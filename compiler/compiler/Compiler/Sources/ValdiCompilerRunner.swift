@@ -361,10 +361,6 @@ class ValdiCompilerRunner {
                                                                        projectConfig: configs.projectConfig,
                                                                        compilerConfig: configs.compilerConfig,
                                                                        nativeCodeGenerationManager: nativeCodeGenerationManager))
-            builder.append(preprocessor: GenerateGlobalMetadataProcessor(logger: logger,
-                                                                         projectConfig: configs.projectConfig,
-                                                                         rootBundle: rootBundle,
-                                                                         shouldMergeWithExistingFile: false))
         } else {
             if let explicitImageAssetManifest = configs.compilerConfig.explicitImageAssetManifest {
                 builder.append(preprocessor: try ExplicitImageAssetsProcessor(logger: logger,
@@ -398,11 +394,6 @@ class ValdiCompilerRunner {
             if !configs.compilerConfig.generateTSResFiles {
                 if configs.projectConfig.iosBuildFileConfig != nil || configs.projectConfig.androidBuildFileConfig != nil
                     || configs.projectConfig.webBuildFileConfig != nil{
-                    let shouldMergeWithExistingFile = modulesFilter != nil
-                    builder.append(preprocessor: GenerateGlobalMetadataProcessor(logger: logger,
-                                                                                 projectConfig: configs.projectConfig,
-                                                                                 rootBundle: rootBundle,
-                                                                                 shouldMergeWithExistingFile: shouldMergeWithExistingFile))
                     builder.append(preprocessor: GenerateBuildFileProcessor(projectConfig: configs.projectConfig))
                 }
                 

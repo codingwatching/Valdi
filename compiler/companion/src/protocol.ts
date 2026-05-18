@@ -25,7 +25,6 @@ export enum Command {
   compileNative = 'compileNative',
   uploadArtifact = 'uploadArtifact',
   updatedDebuggerPorts = 'updatedDebuggerPorts',
-  generateGhostOwnershipMap = 'generateGhostOwnershipMap',
   rewriteImports = 'rewriteImports',
 }
 
@@ -173,10 +172,6 @@ export interface UpdatedDebuggerPorts {
   ports: number[];
 }
 
-export interface GenerateGhostOwnershipMapRequestBody {
-  outputDir: string;
-}
-
 export interface RewriteImportsRequestBody {
   projectDirectory: string;
   oldTypeName: string;
@@ -203,7 +198,6 @@ export type RequestBody =
   | AddCodeInstrumentationRequestBody
   | UploadArtifactRequestBody
   | UpdatedDebuggerPorts
-  | GenerateGhostOwnershipMapRequestBody
   | RewriteImportsRequestBody;
 
 export interface BatchMinifyJSResponseBody {
@@ -338,8 +332,6 @@ export interface UploadArtifactResponseBody {
   sha256: string;
 }
 
-export interface GenerateGhostOwnershipMapResponseBody {}
-
 export interface RewriteImportsResponseBody {}
 
 export type ResponseBody =
@@ -362,5 +354,4 @@ export type ResponseBody =
   | StartDebuggingProxyResponseBody
   | CompileNativeResponseBody
   | AddCodeInstrumentationResponseBody
-  | GenerateGhostOwnershipMapResponseBody
   | RewriteImportsResponseBody;
