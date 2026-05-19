@@ -242,6 +242,12 @@ bool Value::operator==(const Value& other) const noexcept {
             // Automatically converts for number representable objects
             return toDouble() == other.toDouble();
         }
+        if (isString() && other.isString()) {
+            // Strings can be stored as InternedString or StaticString; normalize
+            // to StringBox for cross-subtype equality (e.g. comparing a JS-sourced
+            // value to a schema's compile-time string literal).
+            return toStringBox() == other.toStringBox();
+        }
 
         return false;
     }
