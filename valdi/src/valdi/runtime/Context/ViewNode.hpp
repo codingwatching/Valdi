@@ -473,6 +473,9 @@ public:
     int getScrollAnchorPosition() const;
     void setMaintainScrollAnchor(bool maintain);
 
+    // Preserve scroll position across content-size growth. See ViewNodeScrollState.
+    void setPreserveScrollPosition(bool preserve);
+
     /**
      * Accessibility attributes (checkout NativeTemplateElement.ts for more info)
      */

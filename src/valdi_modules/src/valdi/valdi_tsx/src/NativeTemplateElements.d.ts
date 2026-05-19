@@ -1914,6 +1914,16 @@ export interface ScrollViewInteractive extends ScrollView {
    * @default: false
    */
   maintainScrollAnchor?: boolean;
+
+  /**
+   * @experimental This feature is experimental and may change in future releases.
+   *
+   * When enabled, content size growth is matched by an equal shift in contentOffset.y so
+   * the visible content stays put. Intended for live-update scenarios where the user is
+   * scrolled away from the newest end and shouldn't be bumped when new content lands.
+   * @default: false
+   */
+  preserveScrollPosition?: boolean;
 }
 
 // @NativeTemplateElement({ios: 'SCValdiSpinnerView', android: 'com.snap.valdi.views.ValiSpinnerView', jsx: 'spinner'})

@@ -3095,6 +3095,11 @@ void ViewNode::setMaintainScrollAnchor(bool maintain) {
     scrollState.setMaintainScrollAnchor(maintain);
 }
 
+void ViewNode::setPreserveScrollPosition(bool preserve) {
+    auto& scrollState = getOrCreateScrollState();
+    scrollState.setPreserveScrollPosition(preserve);
+}
+
 template<typename F>
 void ViewNode::updateViewportExtension(F&& handler) {
     auto& scrollState = getOrCreateScrollState();

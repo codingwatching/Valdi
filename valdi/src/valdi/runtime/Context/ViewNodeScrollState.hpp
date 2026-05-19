@@ -107,6 +107,13 @@ public:
     void setMaintainScrollAnchor(bool maintain);
     bool getMaintainScrollAnchor() const;
 
+    // Preserve scroll position: when enabled, content size growth is matched by an equal
+    // shift in contentOffset.y so the visible content stays put. Intended for live-update
+    // scenarios where the user is scrolled away from the newest end and shouldn't be
+    // bumped when new content lands at the array end.
+    void setPreserveScrollPosition(bool preserve);
+    bool getPreserveScrollPosition() const;
+
 private:
     Point _directionAgnosticContentOffset;
     Point _directionAgnosticUnclampedContentOffset;
@@ -128,6 +135,7 @@ private:
     bool _inScrollMode = false;
     bool _isHorizontal = false;
     bool _maintainScrollAnchor = false;
+    bool _preserveScrollPosition = false;
 
     Ref<ValueFunction> _onScrollCallback;
     Ref<ValueFunction> _onScrollEndCallback;

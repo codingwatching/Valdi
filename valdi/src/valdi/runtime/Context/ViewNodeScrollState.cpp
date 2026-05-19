@@ -225,6 +225,9 @@ ViewNodeScrollStateUpdateContentSizeResult ViewNodeScrollState::updateContentSiz
         auto newOverscrollY = calculateOverscroll(
             contentSizeWithStaticSize.height, viewportSize.height, _directionAgnosticContentOffset.y);
 
+        // Capture growth before _contentSize is overwritten so preserveScrollPosition can use it.
+        float growthDeltaY = contentSizeWithStaticSize.height - _contentSize.height;
+
         _contentSize = contentSizeWithStaticSize;
         result.changed = true;
         shouldNotifyContentSizeChangeCallback = true;
@@ -240,6 +243,15 @@ ViewNodeScrollStateUpdateContentSizeResult ViewNodeScrollState::updateContentSiz
             _directionAgnosticContentOffset.y += offsetY;
             _directionAgnosticUnclampedContentOffset.x += offsetX;
             _directionAgnosticUnclampedContentOffset.y += offsetY;
+        }
+
+        // Preserve scroll position: when content grows, shift offset by the same amount
+        // so the visible content stays put. Caller (e.g. inverted message list scroll
+        // handler) toggles this on while the user is scrolled away from the newest end.
+        if (_preserveScrollPosition && growthDeltaY > 0.0f) {
+            _directionAgnosticContentOffset.y += growthDeltaY;
+            _directionAgnosticUnclampedContentOffset.y += growthDeltaY;
+            result.contentOffsetAdjusted = true;
         }
     }
 
@@ -462,6 +474,14 @@ void ViewNodeScrollState::setMaintainScrollAnchor(bool maintain) {
 
 bool ViewNodeScrollState::getMaintainScrollAnchor() const {
     return _maintainScrollAnchor;
+}
+
+void ViewNodeScrollState::setPreserveScrollPosition(bool preserve) {
+    _preserveScrollPosition = preserve;
+}
+
+bool ViewNodeScrollState::getPreserveScrollPosition() const {
+    return _preserveScrollPosition;
 }
 
 } // namespace Valdi
