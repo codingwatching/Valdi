@@ -84,7 +84,7 @@ cc_library(
     ]),
     copts = COMMON_COMPILE_FLAGS,
     defines = select({
-        "@platforms//os:android": ["ANDROID_WITH_JNI"],
+        "//bzl/conditions:android_with_jni": ["ANDROID_WITH_JNI"],
         "//conditions:default": [],
     }),
     includes = ["src"],
