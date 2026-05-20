@@ -5,7 +5,7 @@
  java_import(
      name = "android_sdk",
 -    jars = ["@bazel_tools//tools/android:android_jar"],
-+    jars = ["@@rules_android~~android_sdk_repository_extension~androidsdk//:platforms/android-36/android.jar"],
++    jars = ["@androidsdk//:platforms/android-36/android.jar"],
      neverlink = True,
      visibility = ["//visibility:public"],
  )
