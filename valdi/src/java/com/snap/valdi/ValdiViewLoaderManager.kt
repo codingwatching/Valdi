@@ -114,6 +114,8 @@ class ValdiRuntimeManager(context: Context,
 
     private var forceDarkMode = false
 
+    private var useLocaleLanguageTag = false
+
     private var isIntegrationTestEnvironment = false
 
     /**
@@ -221,6 +223,8 @@ class ValdiRuntimeManager(context: Context,
         val cacheRootDir = cacheRootDirFile.toString()
 
         forceDarkMode = tweaks?.forceDarkMode ?: false
+
+        useLocaleLanguageTag = tweaks?.useLocaleLanguageTag ?: false
 
         isIntegrationTestEnvironment = tweaks?.isTestEnvironment ?: false
 
@@ -439,7 +443,7 @@ class ValdiRuntimeManager(context: Context,
     fun createNativeModules(jsThreadDispatcher: JSThreadDispatcher): ValdiNativeModules {
         return ValdiNativeModules(
                 ValdiApplicationModule(context, isIntegrationTestEnvironment),
-                ValdiDeviceModule(jsThreadDispatcher, context, forceDarkMode),
+                ValdiDeviceModule(jsThreadDispatcher, context, forceDarkMode, useLocaleLanguageTag),
                 ValdiDateFormattingModule(context),
                 ValdiNumberFormattingModule(context),
                 DrawingModuleImpl(coordinateResolver, fontManager, logger),

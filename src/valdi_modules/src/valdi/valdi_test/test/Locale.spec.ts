@@ -22,4 +22,12 @@ describe('Locale', () => {
     expect(locale.language).toBe('fr');
     expect(locale.region).toBe('FR');
   });
+
+  it('can parse with language, script and region', () => {
+    const locale = Locale.parse('zh-Hans-CN');
+
+    expect(locale.language).toBe('zh');
+    expect(locale.script).toBe('Hans');
+    expect(locale.region).toBe('CN');
+  });
 });

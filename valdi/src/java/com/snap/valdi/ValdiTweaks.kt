@@ -54,4 +54,10 @@ data class ValdiTweaks(
           * accessibility hierarchy.
           */
          val enableAccessibilityCustomViewVirtualIdFix: Boolean = false,
+         /**
+          * When true, use [Locale.toLanguageTag] for device locale strings instead of
+          * manually concatenating language and country codes. Fixes trailing-dash issues
+          * (e.g. "nl-" instead of "nl") for locales without a country component.
+          */
+         val useLocaleLanguageTag: Boolean = false,
 )
