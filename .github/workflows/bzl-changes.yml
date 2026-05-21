@@ -117,19 +117,14 @@ jobs:
         with:
           lfs: true
 
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /usr/local/share/boost
-          sudo rm -rf /opt/pip
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /usr/share/swift
-          sudo rm -rf /usr/share/miniconda
-          sudo rm -rf /opt/az
-          sudo apt-get clean
-          df -h
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Linux environment
+        run: source ./tools/ci/setup_linux_env.sh
 
       - name: Mount Bazel cache
         uses: actions/cache@v4
@@ -144,42 +139,10 @@ jobs:
             bazel-${{ runner.os }}-${{ matrix.task }}-${{ hashFiles('MODULE.bazel', '**/*.bzl') }}-
             bazel-${{ runner.os }}-${{ matrix.task }}-
 
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Setup Bazel
-        run: |
-          wget https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64
-          chmod +x bazelisk-linux-amd64
-          sudo mv bazelisk-linux-amd64 /usr/local/bin/bazel
-          sudo ln -s /usr/local/bin/bazel /usr/local/bin/bzl
-          bazel --version
-
       - name: Configure Bazel cache
         run: |
           echo "build --disk_cache=$HOME/.cache/bazel/disk" >> .bazelrc.local
           echo "build --repository_cache=$HOME/.cache/bazel/repo" >> .bazelrc.local
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y \
-            libboost-all-dev \
-            git-lfs \
-            libfontconfig1-dev \
-            zlib1g-dev
-
-          if ! sudo apt-get install -y libtinfo5 2>/dev/null; then
-            echo "libtinfo5 not available in apt, downloading from Ubuntu 22.04 archive..."
-            wget http://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
-            sudo apt install -y ./libtinfo5_6.3-2ubuntu0.1_amd64.deb
-            rm libtinfo5_6.3-2ubuntu0.1_amd64.deb
-          fi
-
-          git lfs install
 
       - name: Setup environment and install Valdi CLI
         if: matrix.task == 'build-export'
