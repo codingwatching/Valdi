@@ -1,0 +1,24 @@
+load("//bzl/valdi:valdi_cli_application.bzl", "valdi_cli_application")
+load("//bzl/valdi:valdi_module.bzl", "valdi_module")
+
+valdi_module(
+    name = "snapshot_tests",
+    srcs = glob([
+        "**/*.ts",
+        "**/*.tsx",
+    ]),
+    visibility = ["//visibility:public"],
+    deps = [
+        "//src/valdi_modules/src/valdi/drawing",
+        "//src/valdi_modules/src/valdi/file_system",
+        "//src/valdi_modules/src/valdi/valdi_core",
+        "//src/valdi_modules/src/valdi/valdi_image_generator",
+        "//src/valdi_modules/src/valdi/valdi_standalone",
+    ],
+)
+
+valdi_cli_application(
+    name = "snapshot_tests_cli",
+    script_path = "snapshot_tests/src/main",
+    deps = [":snapshot_tests"],
+)

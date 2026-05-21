@@ -19,6 +19,8 @@ on:
       - 'src/**/*.ts'
       - 'src/**/*.tsx'
       - 'compiler/**'
+      - 'apps/snapshot_tests/**'
+      - 'snap_drawing/**'
   push:
     branches:
       - main
@@ -39,6 +41,8 @@ on:
       - 'src/**/*.ts'
       - 'src/**/*.tsx'
       - 'compiler/**'
+      - 'apps/snapshot_tests/**'
+      - 'snap_drawing/**'
 
 jobs:
   smoke-test:
@@ -203,9 +207,46 @@ jobs:
           OPEN_SOURCE_DIR: ${{ github.workspace }}
           PROJECT_ROOT: /tmp/valdi_app
 
+  snapshot-tests:
+    name: Snapshot Tests
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install Bazel and watchman
+        run: |
+          brew install bazelisk watchman
+          bazel --version
+
+      - name: Run snapshot tests
+        run: ./tools/ci/snapshot_tests.sh /tmp/valdi-snapshots
+
+      - name: Upload diff images
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-diffs
+          path: /tmp/valdi-snapshots/diffs/
+          retention-days: 5
+
   comment-results:
     name: Comment Test Results
-    needs: [smoke-test, linux-ci]
+    needs: [smoke-test, linux-ci, snapshot-tests]
     if: always()
     uses: ./.github/workflows/comment-test-results.yml
     permissions:
