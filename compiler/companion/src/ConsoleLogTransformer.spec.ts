@@ -24,35 +24,39 @@ function transform(input: string): string {
   return sanitize(result.outputText);
 }
 
+// The compiled optional-chaining guard: globalThis.runtime?.isLoggingEnabled
+// ES2019 target emits the full ternary form.
+const IF_GUARD = 'if ((_a = globalThis.runtime) === null || _a === void 0 ? void 0 : _a.isLoggingEnabled)';
+
 describe('ConsoleLogTransformer', () => {
   describe('wraps direct console calls', () => {
     it('wraps console.log', () => {
       const result = transform(`console.log("hello");`);
-      expect(result).toContain('if (runtime.isLoggingEnabled)');
+      expect(result).toContain(IF_GUARD);
       expect(result).toContain('console.log("hello")');
     });
 
     it('wraps console.warn', () => {
       const result = transform(`console.warn("warning");`);
-      expect(result).toContain('if (runtime.isLoggingEnabled)');
+      expect(result).toContain(IF_GUARD);
       expect(result).toContain('console.warn("warning")');
     });
 
     it('wraps console.error', () => {
       const result = transform(`console.error("error");`);
-      expect(result).toContain('if (runtime.isLoggingEnabled)');
+      expect(result).toContain(IF_GUARD);
       expect(result).toContain('console.error("error")');
     });
 
     it('wraps console.info', () => {
       const result = transform(`console.info("info");`);
-      expect(result).toContain('if (runtime.isLoggingEnabled)');
+      expect(result).toContain(IF_GUARD);
       expect(result).toContain('console.info("info")');
     });
 
     it('wraps console.debug', () => {
       const result = transform(`console.debug("debug");`);
-      expect(result).toContain('if (runtime.isLoggingEnabled)');
+      expect(result).toContain(IF_GUARD);
       expect(result).toContain('console.debug("debug")');
     });
   });
@@ -61,18 +65,18 @@ describe('ConsoleLogTransformer', () => {
     it('wraps calls with template literals', () => {
       const input = 'const x = 42;\nconsole.log(`value is ${x}`);';
       const result = transform(input);
-      expect(result).toContain('if (runtime.isLoggingEnabled)');
+      expect(result).toContain(IF_GUARD);
     });
 
     it('wraps calls with multiple arguments', () => {
       const result = transform(`console.log("a", someObj, 123);`);
-      expect(result).toContain('if (runtime.isLoggingEnabled)');
+      expect(result).toContain(IF_GUARD);
       expect(result).toContain('console.log("a", someObj, 123)');
     });
 
     it('wraps calls with function call arguments', () => {
       const result = transform(`console.log(JSON.stringify(obj));`);
-      expect(result).toContain('if (runtime.isLoggingEnabled)');
+      expect(result).toContain(IF_GUARD);
       expect(result).toContain('JSON.stringify(obj)');
     });
   });
@@ -86,7 +90,7 @@ describe('ConsoleLogTransformer', () => {
       `;
       const result = transform(input);
       // Should have 3 separate if guards
-      const guardCount = (result.match(/runtime\.isLoggingEnabled/g) || []).length;
+      const guardCount = (result.match(/globalThis\.runtime/g) || []).length;
       expect(guardCount).toBe(3);
     });
   });
@@ -99,7 +103,7 @@ describe('ConsoleLogTransformer', () => {
         }
       `;
       const result = transform(input);
-      expect(result).toContain('if (runtime.isLoggingEnabled)');
+      expect(result).toContain(IF_GUARD);
       expect(result).toContain('console.log("inside function")');
     });
 
@@ -110,7 +114,7 @@ describe('ConsoleLogTransformer', () => {
         };
       `;
       const result = transform(input);
-      expect(result).toContain('if (runtime.isLoggingEnabled)');
+      expect(result).toContain(IF_GUARD);
     });
 
     it('wraps calls inside class methods', () => {
@@ -122,7 +126,7 @@ describe('ConsoleLogTransformer', () => {
         }
       `;
       const result = transform(input);
-      expect(result).toContain('if (runtime.isLoggingEnabled)');
+      expect(result).toContain(IF_GUARD);
     });
   });
 
@@ -130,20 +134,22 @@ describe('ConsoleLogTransformer', () => {
     it('does not wrap console.error used as a callback reference', () => {
       const input = `promise.catch(console.error);`;
       const result = transform(input);
-      expect(result).not.toContain('runtime.isLoggingEnabled');
+      expect(result).not.toContain('globalThis.runtime');
+      expect(result).not.toContain('.isLoggingEnabled');
       expect(result).toContain('promise.catch(console.error)');
     });
 
     it('does not wrap console.log assigned to a variable', () => {
       const input = `const result = console.log("test");`;
       const result = transform(input);
-      expect(result).not.toContain('runtime.isLoggingEnabled');
+      expect(result).not.toContain('globalThis.runtime');
+      expect(result).not.toContain('.isLoggingEnabled');
     });
 
     it('wraps console.log in expression-bodied arrow', () => {
       const input = `const fn = (x: any) => console.log(x);`;
       const result = transform(input);
-      expect(result).toContain('runtime.isLoggingEnabled');
+      expect(result).toContain(IF_GUARD);
       expect(result).toContain('const fn = (x) => {');
       expect(result).toContain('console.log(x)');
     });
@@ -151,21 +157,22 @@ describe('ConsoleLogTransformer', () => {
     it('wraps parenthesized console.log in expression-bodied arrow', () => {
       const input = `const fn = (x: any) => (console.log(x));`;
       const result = transform(input);
-      expect(result).toContain('runtime.isLoggingEnabled');
+      expect(result).toContain(IF_GUARD);
       expect(result).toContain('console.log(x)');
     });
 
     it('does not wrap non-direct console usage in expression-bodied arrow', () => {
       const input = `const fn = (x: any) => doSomething(console.log(x));`;
       const result = transform(input);
-      expect(result).not.toContain('runtime.isLoggingEnabled');
+      expect(result).not.toContain('globalThis.runtime');
+      expect(result).not.toContain('.isLoggingEnabled');
       expect(result).toContain('doSomething(console.log(x))');
     });
 
     it('wraps nested expression-bodied arrow console calls in default parameters', () => {
       const input = `const fn = (x: any = (() => console.log("param"))()) => console.log(x);`;
       const result = transform(input);
-      const guardCount = (result.match(/runtime\.isLoggingEnabled/g) || []).length;
+      const guardCount = (result.match(/globalThis\.runtime/g) || []).length;
       expect(guardCount).toBe(2);
       expect(result).toContain('console.log("param")');
       expect(result).toContain('console.log(x)');
@@ -176,19 +183,19 @@ describe('ConsoleLogTransformer', () => {
     it('does not wrap console.trace', () => {
       const input = `console.trace("trace");`;
       const result = transform(input);
-      expect(result).not.toContain('runtime.isLoggingEnabled');
+      expect(result).not.toContain('.isLoggingEnabled');
     });
 
     it('does not wrap other objects with log method', () => {
       const input = `logger.log("test");`;
       const result = transform(input);
-      expect(result).not.toContain('runtime.isLoggingEnabled');
+      expect(result).not.toContain('.isLoggingEnabled');
     });
 
     it('does not wrap runtime.outputLog', () => {
       const input = `runtime.outputLog(2, "test");`;
       const result = transform(input);
-      expect(result).not.toContain('runtime.isLoggingEnabled');
+      expect(result).not.toContain('.isLoggingEnabled');
     });
   });
 
@@ -202,7 +209,7 @@ describe('ConsoleLogTransformer', () => {
       const result = transform(input);
       expect(result).toContain('const x = 1');
       expect(result).toContain('const y = 2');
-      expect(result).toContain('if (runtime.isLoggingEnabled)');
+      expect(result).toContain(IF_GUARD);
     });
   });
 

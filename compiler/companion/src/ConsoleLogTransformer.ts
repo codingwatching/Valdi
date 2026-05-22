@@ -47,11 +47,18 @@ function isConsoleCall(node: ts.CallExpression): boolean {
 }
 
 /**
- * Creates the guard expression: `runtime.isLoggingEnabled`
+ * Creates the guard expression: `globalThis.runtime?.isLoggingEnabled`
+ *
+ * Uses optional chaining so modules that evaluate before the runtime is
+ * initialized (e.g. during bootstrap) don't throw a TypeError.
  */
 function createGuardExpression(factory: ts.NodeFactory): ts.Expression {
-  return factory.createPropertyAccessExpression(
-    factory.createIdentifier('runtime'),
+  return factory.createPropertyAccessChain(
+    factory.createPropertyAccessExpression(
+      factory.createIdentifier('globalThis'),
+      factory.createIdentifier('runtime'),
+    ),
+    factory.createToken(ts.SyntaxKind.QuestionDotToken),
     factory.createIdentifier('isLoggingEnabled'),
   );
 }
