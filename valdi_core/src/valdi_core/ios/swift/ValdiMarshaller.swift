@@ -378,6 +378,9 @@ open class ValdiMarshaller {
     }
 
     public func getGenericObject<T>(_ index: Int) throws -> T {
+        if let marshallableType = T.self as? ValdiMarshallableObject.Type {
+            return try marshallableType.init(from: self, at: index) as! T
+        }
         return try getObject(index)
     }
 

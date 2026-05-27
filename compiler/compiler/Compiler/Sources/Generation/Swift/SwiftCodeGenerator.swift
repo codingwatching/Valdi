@@ -382,6 +382,12 @@ final class SwiftSourceFileGenerator : CodeWriter {
 
         let returnValue = getUnmarshallerFunction(for: functionParser.returnType, withParameter: "-1")
         let shouldSync = returnValue.isEmpty ? "false" : "true"
+        let returnBlock: String
+        if returnValue.isEmpty {
+            returnBlock = "try marshaller.checkError()"
+        } else {
+            returnBlock = "let __result: \(functionParser.returnType.typeName) = \(returnValue)" + indent(spaces: 12) + "try marshaller.checkError()" + indent(spaces: 12) + "return __result"
+        }
         return  """
                     static func create_\(functionParser.functionHelperName)_from_bridgeFunction(using functionImpl: ValdiFunction\(optionalMark)) -> (\(functionParser.methodTypeWithoutNames))\(optionalMark) {
                         \(optionalPredicate)
@@ -392,7 +398,7 @@ final class SwiftSourceFileGenerator : CodeWriter {
                                 try marshaller.checkError()
                                 throw ValdiError.functionCallFailed(\"\(functionParser.functionHelperName)\")
                             }
-                            return \(returnValue)
+                            \(returnBlock)
                         }
                     }\n
                 """
