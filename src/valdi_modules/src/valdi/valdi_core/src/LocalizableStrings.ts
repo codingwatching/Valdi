@@ -55,7 +55,12 @@ export function buildInlineModule(
     new InlineUnparsedLocalizableStringResolver(
       availableLanguages,
       filePaths,
-      filePath => JSON.parse(runtime.getModuleEntry(module, filePath, true) as string),
+      filePath => {
+        // Check for bundler-preloaded JSON (web builds register lazy thunks via __valdiPreloadedStrings)
+        const preloaded = (globalThis as any).__valdiPreloadedStrings?.[module]?.[filePath];
+        if (typeof preloaded === 'function') return preloaded();
+        return JSON.parse(runtime.getModuleEntry(module, filePath, true) as string);
+      },
       getCurrentLocales,
     ),
     strings,

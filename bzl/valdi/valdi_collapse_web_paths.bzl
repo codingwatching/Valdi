@@ -149,6 +149,20 @@ def _impl(ctx):
 
     ctx.actions.write(manifest, "\n".join(lines) + "\n")
 
+    # Build strings manifest: module_name \t strings_dir (one line per module with strings).
+    # Used by the shell script to generate _strings_preload.js files for web bundlers.
+    strings_manifest = ctx.actions.declare_file(ctx.label.name + ".strings_manifest")
+    strings_lines = []
+    all_modules = depset(
+        direct = ctx.attr.modules,
+        transitive = [m[ValdiModuleInfo].deps for m in ctx.attr.modules],
+    )
+    for m in all_modules.to_list():
+        info = m[ValdiModuleInfo]
+        if info.strings_dir:
+            strings_lines.append("{}\t{}".format(info.name, info.strings_dir))
+    ctx.actions.write(strings_manifest, "\n".join(strings_lines) + "\n")
+
     # tiny shell copier with .d.ts import rewriting
     sh = ctx.actions.declare_file(ctx.label.name + ".sh")
     ctx.actions.write(
@@ -156,7 +170,7 @@ def _impl(ctx):
         is_executable = True,
         content = """#!/usr/bin/env bash
         set -euo pipefail
-        OUT="$1"; MAN="$2"; PKG_NAME="$3"
+        OUT="$1"; MAN="$2"; PKG_NAME="$3"; STRINGS_MAN="$4"
         rm -rf "$OUT"; mkdir -p "$OUT"
 
         while IFS=$'\\t' read -r SRC DEST; do
@@ -191,15 +205,57 @@ def _impl(ctx):
                 sed -i -E "s|import \\"([a-zA-Z0-9_.-]+/src/[^\\"]+)\\"|import \\"${PKG_NAME}/src/\\1\\"|g" "$file"
             fi
         done
+
+        # Generate _strings_preload.js for each module with locale JSON.
+        # Reads the strings manifest (module_name \t strings_dir) to know
+        # exactly where each module's locale JSONs live. Generates a preload
+        # file with lazy require() thunks registered on
+        # globalThis.__valdiPreloadedStrings. A bundler (e.g. webpack)
+        # resolves the require() calls at build time. On native this file
+        # does not exist so the fallback to runtime.getModuleEntry is used.
+        while IFS=$'\\t' read -r MOD_NAME SDIR; do
+            [ -z "$MOD_NAME" ] && continue
+            MOD_DIR="$OUT/src/$MOD_NAME"
+            MOD_SRC_DIR="$MOD_DIR/src"
+            STRINGS_DIR="$MOD_DIR/$SDIR"
+            STRINGS_JS="$MOD_SRC_DIR/Strings.js"
+
+            [ -f "$STRINGS_JS" ] || continue
+            [ -d "$STRINGS_DIR" ] || continue
+
+            JSONS=$(find "$STRINGS_DIR" -name "*.json" -type f 2>/dev/null | sort)
+            [ -z "$JSONS" ] && continue
+
+            PRELOAD="$MOD_SRC_DIR/_strings_preload.js"
+            chmod u+w "$MOD_SRC_DIR"
+            {
+                echo "// Auto-generated: pre-loads locale JSON for bundler resolution"
+                echo "(globalThis.__valdiPreloadedStrings = globalThis.__valdiPreloadedStrings || {})"
+                printf "  ['%s'] = {\\n" "$MOD_NAME"
+                echo "$JSONS" | while IFS= read -r json_file; do
+                    REL_PATH="${json_file#"$MOD_DIR"/}"
+                    printf "  '%s': () => require('../%s'),\\n" "$REL_PATH" "$REL_PATH"
+                done
+                echo "};"
+            } > "$PRELOAD"
+
+            # Append require('./_strings_preload') to Strings.js so the
+            # bundler pulls in the preload file when this module is imported.
+            # Appended (not prepended) to preserve "use strict"; directive.
+            # Thunks are lazy so evaluation order doesn't matter.
+            chmod u+w "$STRINGS_JS"
+            echo "" >> "$STRINGS_JS"
+            echo "require('./_strings_preload');" >> "$STRINGS_JS"
+        done < "$STRINGS_MAN"
         """,
     )
 
     ctx.actions.run(
-        inputs = [manifest] + ctx.files.srcs,
+        inputs = [manifest, strings_manifest] + ctx.files.srcs,
         outputs = [outdir],
         tools = [sh],
         executable = sh,
-        arguments = [outdir.path, manifest.path, package_name],
+        arguments = [outdir.path, manifest.path, package_name, strings_manifest.path],
         progress_message = "Collapsing web paths and rewriting .d.ts imports into {}".format(outdir.path),
     )
     return [DefaultInfo(files = depset([outdir]))]
@@ -214,6 +270,11 @@ collapse_web_paths = rule(
             default = "@valdi//src/valdi_modules/src/valdi/valdi_tsx:web/JSX.stub.d.ts",
             allow_single_file = True,
             doc = "Stub file to use when exclude_jsx_global_declaration is True",
+        ),
+        "modules": attr.label_list(
+            default = [],
+            providers = [ValdiModuleInfo],
+            doc = "Valdi module targets. Used to read strings_dir for generating locale preload files.",
         ),
     },
 )

@@ -211,4 +211,5 @@ done | sed '/^import ValdiCoreSwift$$/d' > $@
         srcs = [":{}_glob".format(web_package_name)],
         package_name = package_name,
         exclude_jsx_global_declaration = web_exclude_jsx_global_declaration,
+        modules = deps,
     )

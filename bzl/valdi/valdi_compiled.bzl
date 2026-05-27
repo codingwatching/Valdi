@@ -107,6 +107,7 @@ ValdiModuleInfo = provider(
         "web_deps": "Web ts/js dependencies",
         "web_dts_files": "TypeScript declaration files (.d.ts) for web",
         "web_register_native_module_id_overrides": "Optional dict: native dest path (e.g. 'valdi_core/web/DeviceBridge.js') -> runtime module ID (e.g. 'DeviceBridge'). Declared by the module that owns the web stub.",
+        "strings_dir": "The strings directory for this module (e.g. 'strings', 'src/strings', 'lib/strings'). Empty string if no strings.",
     },
 )
 
@@ -1839,6 +1840,7 @@ def _create_valdi_module_info(ctx, module_name, module_yaml, module_definition, 
         web_deps = _extract_npm_package_files(ctx.attr.web_deps),
         web_dts_files = in_declarations + out_declarations,
         web_register_native_module_id_overrides = ctx.attr.web_register_native_module_id_overrides,
+        strings_dir = ctx.attr.strings_dir or "",
     )
 
 def _extract_npm_package_files(pkgs):
