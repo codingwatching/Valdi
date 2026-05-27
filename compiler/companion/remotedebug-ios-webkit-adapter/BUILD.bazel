@@ -38,6 +38,7 @@ ts_project(
     deps = [
         ":node_modules/@types/debug",
         ":node_modules/@types/express",
+        ":node_modules/@types/istanbul-lib-coverage",
         ":node_modules/@types/optimist",
         ":node_modules/@types/request",
         ":node_modules/@types/which",
