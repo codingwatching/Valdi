@@ -39,11 +39,12 @@ valdi_module(
     ]) + [
         "tsconfig.json",
     ],
+    android_class_path = "com.snap.modules.valdi_tsx",
     android_output_target = "release",
     ios_module_name = "SCCValdiTsx",
     ios_output_target = "release",
     no_compiled_valdimodule_output = True,
-    single_file_codegen = False,
+    single_file_codegen = True,
     visibility = ["//visibility:public"],
     web_deps = [":valdi_tsx_web"],
 )

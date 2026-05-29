@@ -1,7 +1,7 @@
 /**
  * @ExportModel({
  *   ios: 'SCPoint',
- *   android: 'com.snap.client.valdi.Point'
+ *   android: 'com.snap.modules.valdi_tsx.Point'
  * })
  */
 export interface Point {
@@ -12,7 +12,7 @@ export interface Point {
 /**
  * @ExportModel({
  *   ios: 'SCSize',
- *   android: 'com.snap.client.valdi.Size'
+ *   android: 'com.snap.modules.valdi_tsx.Size'
  * })
  */
 export interface Size {
@@ -28,7 +28,7 @@ export interface Vector {
 /**
  * @ExportModel({
  *   ios: 'SCElementFrame',
- *   android: 'com.snap.client.valdi.ElementFrame'
+ *   android: 'com.snap.modules.valdi_tsx.ElementFrame'
  * })
  */
 export interface ElementFrame {
