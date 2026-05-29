@@ -219,10 +219,11 @@ export class WebValdiLayout {
     return (event: MouseEvent | TouchEvent) => {
       if (typeof value !== 'function') return;
       const touch = 'touches' in event ? event.touches[0] || event.changedTouches[0] : event;
+      const rect = this.htmlElement.getBoundingClientRect();
       const touchEvent = {
         state,
-        x: touch.clientX,
-        y: touch.clientY,
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top,
         absoluteX: touch.clientX,
         absoluteY: touch.clientY,
         pointerCount: 'touches' in event ? event.touches.length : 1,
@@ -301,11 +302,15 @@ export class WebValdiLayout {
         }
         return;
       case 'slowClipping':
+        this.htmlElement.style.overflow = attributeValue ? 'hidden' : 'visible';
+        return;
       case 'touchEnabled':
       case 'hitTest':
         this.htmlElement.style.pointerEvents = attributeValue ? 'auto' : 'none';
         return;
-      case 'onTouch':
+      case 'onTouch': {
+        this.htmlElement.style.pointerEvents = 'auto';
+        // Touch events (mobile)
         this.htmlElement.addEventListener(
           'touchstart',
           this.createTouchEventHandler(attributeValue, TouchEventState.Started),
@@ -322,7 +327,23 @@ export class WebValdiLayout {
           'touchcancel',
           this.createTouchEventHandler(attributeValue, TouchEventState.Ended),
         );
+        // Mouse events (desktop) — attach move/up on document so dragging beyond the element still works
+        const mouseMoveHandler = this.createTouchEventHandler(attributeValue, TouchEventState.Changed);
+        const mouseEndHandler = this.createTouchEventHandler(attributeValue, TouchEventState.Ended);
+        const onMouseUp = (e: MouseEvent) => {
+          if (e.button !== 0) return;
+          document.removeEventListener('mousemove', mouseMoveHandler);
+          document.removeEventListener('mouseup', onMouseUp);
+          mouseEndHandler(e);
+        };
+        this.htmlElement.addEventListener('mousedown', (e: MouseEvent) => {
+          if (e.button !== 0) return;
+          this.createTouchEventHandler(attributeValue, TouchEventState.Started)(e);
+          document.addEventListener('mousemove', mouseMoveHandler);
+          document.addEventListener('mouseup', onMouseUp);
+        });
         return;
+      }
       case 'onTouchStart':
         this.htmlElement.addEventListener(
           'touchstart',
