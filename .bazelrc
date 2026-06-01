@@ -98,5 +98,10 @@ build --define=open_source_build=true
 
 common --@aspect_rules_ts//ts:skipLibCheck=always
 
+# cargo-bazel computes platform-specific lock digests (the binary itself
+# differs per OS), so a lockfile generated on macOS will fail validation
+# on Linux and vice versa. Auto-repin so builds work on any platform.
+build --repo_env=CARGO_BAZEL_REPIN=true
+
 # Remote cache (activated in CI via .bazelrc.local)
 build:ci --experimental_circuit_breaker_strategy=failure
