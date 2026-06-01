@@ -17,9 +17,11 @@ valdi_module(
     ],
     android_output_target = "release",
     disable_annotation_processing = True,
+    has_android_exports = False,
+    has_ios_exports = False,
     ios_module_name = "SCCValdiRxjs",
     ios_output_target = "release",
-    single_file_codegen = False,
+    single_file_codegen = True,
     visibility = ["//visibility:public"],
     deps = [
         "@valdi//src/valdi_modules/src/valdi/valdi_core",
