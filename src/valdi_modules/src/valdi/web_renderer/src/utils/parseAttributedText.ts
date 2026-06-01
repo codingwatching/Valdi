@@ -25,6 +25,7 @@ interface StyleState {
   onTap?: AttributedTextOnTap;
   outlineColor?: string;
   outlineWidth?: number;
+  outerOutlineColor?: string;
 }
 
 interface StyleStackEntry {
@@ -98,6 +99,9 @@ export function renderAttributedText(attributedText: AttributedText): HTMLSpanEl
         i += 2;
         break;
       case AttributedTextEntryType.PushOuterOutlineColor:
+        styleStack.push({ type: 'outerOutlineColor', value: attributedText[i + 1] });
+        i += 2;
+        break;
       case AttributedTextEntryType.PushOuterOutlineWidth:
       case AttributedTextEntryType.PushInlineImage:
       case AttributedTextEntryType.PushAnimationTransform:
@@ -121,7 +125,17 @@ function createStyledSpan(text: string, style: StyleState): HTMLSpanElement {
   }
 
   if (style.font) {
-    span.style.fontFamily = style.font;
+    const tokens = style.font.trim().split(/\s+/);
+    let familyEnd = tokens.length;
+    // Parse optional weight (last token) and size (second-to-last) from the
+    // tail so multi-word families like "Times New Roman 16 bold" work.
+    if (familyEnd > 1 && isWeightToken(tokens[familyEnd - 1])) {
+      span.style.fontWeight = tokens[--familyEnd];
+    }
+    if (familyEnd > 1 && !Number.isNaN(Number(tokens[familyEnd - 1]))) {
+      span.style.fontSize = `${tokens[--familyEnd]}px`;
+    }
+    span.style.fontFamily = tokens.slice(0, familyEnd).join(' ');
   }
 
   if (style.textDecoration === 'underline') {
@@ -130,9 +144,18 @@ function createStyledSpan(text: string, style: StyleState): HTMLSpanElement {
     span.style.textDecoration = 'line-through';
   }
 
-  if (style.outlineColor && style.outlineWidth) {
+  if (style.outerOutlineColor) {
+    span.style.backgroundColor = convertColor(style.outerOutlineColor);
+    span.style.borderRadius = '6px';
+    span.style.padding = '2px 8px';
+    span.style.setProperty('box-decoration-break', 'clone');
+    span.style.setProperty('-webkit-box-decoration-break', 'clone');
+    if (style.outlineColor) {
+      span.style.border = `1px solid ${convertColor(style.outlineColor)}`;
+    }
+  } else if (style.outlineColor && style.outlineWidth) {
     const w = style.outlineWidth;
-    span.style.textShadow = `-${w}px -${w}px 0 ${style.outlineColor}, ${w}px -${w}px 0 ${style.outlineColor}, -${w}px ${w}px 0 ${style.outlineColor}, ${w}px ${w}px 0 ${style.outlineColor}`;
+    span.style.textShadow = `-${w}px -${w}px 0 ${convertColor(style.outlineColor)}, ${w}px -${w}px 0 ${convertColor(style.outlineColor)}, -${w}px ${w}px 0 ${convertColor(style.outlineColor)}, ${w}px ${w}px 0 ${convertColor(style.outlineColor)}`;
   }
 
   if (style.onTap) {
@@ -145,4 +168,13 @@ function createStyledSpan(text: string, style: StyleState): HTMLSpanElement {
   }
 
   return span;
+}
+
+const FONT_WEIGHTS = new Set([
+  'normal', 'bold', 'lighter', 'bolder',
+  '100', '200', '300', '400', '500', '600', '700', '800', '900',
+]);
+
+function isWeightToken(token: string): boolean {
+  return FONT_WEIGHTS.has(token.toLowerCase());
 }
