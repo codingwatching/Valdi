@@ -9,6 +9,10 @@ export interface Provider<T> {
   get(): T;
 }
 
+export function providerFrom<T>(callback: () => T): Provider<T> {
+  return { get: callback };
+}
+
 export function providerToLazy<T>(provider: Provider<T>): Lazy<T>;
 export function providerToLazy<T>(provider?: Provider<T>): Lazy<T> | undefined;
 export function providerToLazy<T>(provider?: Provider<T>): Lazy<T> | undefined {
