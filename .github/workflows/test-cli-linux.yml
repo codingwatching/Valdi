@@ -17,6 +17,10 @@ on:
       - '.github/workflows/test-cli-linux.yml'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-distribution-detection:
     name: Test on ${{ matrix.distro }}
