@@ -28,10 +28,11 @@ valdi_module(
     ]) + [
         "tsconfig.json",
     ],
+    android_class_path = "com.snap.modules.drawing",
     android_output_target = "release",
     ios_module_name = "SCCDrawing",
     ios_output_target = "release",
-    single_file_codegen = False,
+    single_file_codegen = True,
     visibility = ["//visibility:public"],
     web_deps = [":drawing_web"],
     web_register_native_module_id_overrides = {

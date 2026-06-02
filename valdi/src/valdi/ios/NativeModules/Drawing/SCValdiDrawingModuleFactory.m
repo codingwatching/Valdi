@@ -6,8 +6,6 @@
 //
 
 #import "valdi/ios/NativeModules/Drawing/SCValdiDrawingModuleFactory.h"
-#import "SCCDrawing/SCValdiDrawingModule.h"
-
 #import "valdi/ios/Text/NSAttributedString+Valdi.h"
 #import "valdi/ios/Text/SCValdiFont.h"
 #import "valdi/ios/Text/SCValdiFontManager.h"

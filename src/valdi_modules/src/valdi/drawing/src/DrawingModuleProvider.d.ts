@@ -1,7 +1,7 @@
 import { AttributedTextNative } from './AttributedTextNative';
 
 /**
- * @ExportModel({ios: 'SCValdiDrawingFontSpecs', android: 'com.snap.valdi.modules.drawing.FontSpecs'})
+ * @ExportModel({ios: 'SCValdiDrawingFontSpecs', android: 'com.snap.modules.drawing.FontSpecs'})
  */
 export interface FontSpecs {
   font: string;
@@ -9,7 +9,7 @@ export interface FontSpecs {
 }
 
 /**
- * @ExportModel({ios: 'SCValdiDrawingSize', android: 'com.snap.valdi.modules.drawing.Size'})
+ * @ExportModel({ios: 'SCValdiDrawingSize', android: 'com.snap.modules.drawing.Size'})
  */
 export interface Size {
   width: number;
@@ -17,7 +17,7 @@ export interface Size {
 }
 
 /**
- * @ExportEnum({ios: 'SCValdiDrawingFontWeight', android: 'com.snap.valdi.modules.drawing.FontWeight'})
+ * @ExportEnum({ios: 'SCValdiDrawingFontWeight', android: 'com.snap.modules.drawing.FontWeight'})
  */
 export const enum FontWeight {
   LIGHT = 'light',
@@ -29,7 +29,7 @@ export const enum FontWeight {
 }
 
 /**
- * @ExportEnum({ios: 'SCValdiDrawingFontStyle', android: 'com.snap.valdi.modules.drawing.FontStyle'})
+ * @ExportEnum({ios: 'SCValdiDrawingFontStyle', android: 'com.snap.modules.drawing.FontStyle'})
  */
 export const enum FontStyle {
   NORMAL = 'normal',
@@ -37,7 +37,7 @@ export const enum FontStyle {
 }
 
 /**
- * @ExportProxy({ios: 'SCValdiDrawingFont', android: 'com.snap.valdi.modules.drawing.Font'})
+ * @ExportProxy({ios: 'SCValdiDrawingFont', android: 'com.snap.modules.drawing.Font'})
  */
 export interface Font {
   measureText(text: string, maxWidth?: number, maxHeight?: number, maxLines?: number): Size;
@@ -50,7 +50,7 @@ export interface Font {
 }
 
 /**
- * @ExportProxy({android: 'com.snap.valdi.modules.drawing.DrawingModule', ios: 'SCValdiDrawingModule'})
+ * @ExportProxy({android: 'com.snap.modules.drawing.DrawingModule', ios: 'SCValdiDrawingModule'})
  */
 export interface DrawingModule {
   getFont(specs: FontSpecs): Font;
