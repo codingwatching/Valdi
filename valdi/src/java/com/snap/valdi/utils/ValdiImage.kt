@@ -37,12 +37,7 @@ abstract class ValdiImage: BitmapHandler {
     }
 
     fun getContentAsBitmap(): Bitmap? {
-        return try {
-            // TODO(simon): Remove once getBitmap() is completely removed
-            getBitmap()
-        } catch (exc: UnsupportedOperationException) {
-            (getContent() as? ValdiImageContent.Bitmap)?.bitmap
-        }
+        return (getContent() as? ValdiImageContent.Bitmap)?.bitmap
     }
 
     // TODO(simon): Remove inheritance of BitmapHandler from ValdiImage
