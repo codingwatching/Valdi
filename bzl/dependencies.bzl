@@ -397,9 +397,9 @@ def setup_dependencies(workspace_root = None):
 
     http_archive(
         name = "aspect_rules_js",
-        sha256 = "6b7e73c35b97615a09281090da3645d9f03b2a09e8caa791377ad9022c88e2e6",
-        strip_prefix = "rules_js-2.0.0",
-        url = "https://github.com/aspect-build/rules_js/releases/download/v2.0.0/rules_js-v2.0.0.tar.gz",
+        sha256 = "1774702556e1d0b83b7f5eb58ec95676afe6481c62596b53f5b96575bacccf73",
+        strip_prefix = "rules_js-2.9.2",
+        url = "https://github.com/aspect-build/rules_js/releases/download/v2.9.2/rules_js-v2.9.2.tar.gz",
     )
 
     http_archive(

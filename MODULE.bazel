@@ -93,7 +93,7 @@ bazel_dep(name = "bazel_features", version = "1.10.0")
 
 bazel_dep(name = "platforms", version = "0.0.11")
 
-bazel_dep(name = "aspect_rules_js", version = "2.0.0")
+bazel_dep(name = "aspect_rules_js", version = "2.9.2")
 # Explicit dep so we can patch in Node 22 support. Remove once rules_nodejs
 # natively includes Node 22 in its built-in version list.
 bazel_dep(name = "rules_nodejs", version = "6.2.0")
