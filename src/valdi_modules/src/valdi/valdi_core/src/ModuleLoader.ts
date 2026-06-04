@@ -298,17 +298,25 @@ export class ModuleLoader implements IModuleLoader {
   }
 
   private unloadNextModule(modulesToKeep: StringSet, unloadedModules: StringSet): boolean {
+    const leaves: string[] = [];
     for (const modulePath in this.modules) {
       if (modulesToKeep[modulePath]) {
         continue;
       }
       const jsModule = this.modules[modulePath];
       if (jsModule && !isModuleUsed(jsModule)) {
-        this.doUnload(modulePath, unloadedModules);
-        return true;
+        leaves.push(modulePath);
       }
     }
-    return false;
+    let unloadedAny = false;
+    for (const modulePath of leaves) {
+      const jsModule = this.modules[modulePath];
+      if (jsModule && !isModuleUsed(jsModule)) {
+        this.doUnload(modulePath, unloadedModules);
+        unloadedAny = true;
+      }
+    }
+    return unloadedAny;
   }
 
   unload(paths: string[], isHotReloading: boolean, disableHotReloadDenyList: boolean): string[] {
