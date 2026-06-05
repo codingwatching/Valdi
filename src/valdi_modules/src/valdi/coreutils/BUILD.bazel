@@ -38,6 +38,9 @@ valdi_module(
     ios_output_target = "release",
     visibility = ["//visibility:public"],
     web_deps = [":coreutils_web"],
+    web_register_native_module_id_overrides = {
+        "coreutils/web/UnicodeNative.js": "coreutils/src/UnicodeNative, coreutils/src/unicode/UnicodeNative",
+    },
     deps = [
         "//src/valdi_modules/src/valdi/jasmine",
     ],
