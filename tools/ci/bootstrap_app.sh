@@ -17,6 +17,10 @@ which ios_webkit_debug_proxy
 OPEN_SOURCE_DIR="$(pwd)"
 APP_DIR="/tmp/valdi_app"
 
+# Auto-repin Rust crate lockfiles so the digest matches regardless of whether
+# @valdi is the root module (public repo) or a dependency (internal monorepo).
+export CARGO_BAZEL_REPIN=true
+
 # Make sure the targets build
 if [[ $(uname) != Linux ]] ; then
     pushd "$OPEN_SOURCE_DIR/npm_modules/cli"
