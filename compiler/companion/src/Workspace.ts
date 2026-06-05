@@ -11,6 +11,7 @@ import {
 import { ILogger } from './logger/ILogger';
 import { JSXProcessor } from './JSXProcessor';
 import { createConsoleLogTransformer } from './ConsoleLogTransformer';
+import { createWebRequireTransformer } from './WebRequireTransformer';
 import {
   Diagnostic,
   DumpedInterface,
@@ -249,6 +250,12 @@ export class Workspace implements IWorkspace {
     // Wrap console.log/warn/error/info/debug calls in runtime.isLoggingEnabled guards.
     // This is safe in dev builds because runtime.isLoggingEnabled is always true.
     resolvedCustomTransformers.before!.push(createConsoleLogTransformer());
+
+    // Annotate variable-arg require() calls with /* @valdi-dynamic */ for web.
+    // Runs on all platforms — only adds a comment, no behavior change.
+    // On web: PrependWebJsProcessor converts annotated requires to moduleLoader.load().
+    // On native: minifier strips the comment.
+    resolvedCustomTransformers.before!.push(createWebRequireTransformer());
 
     resolvedCustomTransformers = mergeCustomTransformers(resolvedCustomTransformers, customTransformers);
 
