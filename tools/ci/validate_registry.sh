@@ -224,7 +224,10 @@ if ! command -v bazelisk &>/dev/null; then
 fi
 
 MOD_GRAPH_STDERR=$(mktemp)
-MOD_GRAPH=$(USE_BAZEL_VERSION=7.2.1 $BAZEL_CMD mod graph --output json --depth 99 2>"$MOD_GRAPH_STDERR") || true
+# CARGO_BAZEL_REPIN=1 is set here (not in .bazelrc) so cargo-bazel repins during
+# module resolution without affecting the subsequent bazel build invocation where
+# the @@// patch path must resolve against the valdi source, not the consumer root.
+MOD_GRAPH=$(CARGO_BAZEL_REPIN=1 USE_BAZEL_VERSION=7.2.1 $BAZEL_CMD mod graph --output json --depth 99 --lockfile_mode=update 2>"$MOD_GRAPH_STDERR") || true
 
 if [ -z "$MOD_GRAPH" ]; then
     echo "stderr from bazel mod graph:"
