@@ -18,6 +18,7 @@
 #include "snap_drawing/cpp/Utils/BitmapUtils.hpp"
 
 #include "include/codec/SkEncodedImageFormat.h"
+#include "include/codec/SkGifDecoder.h"
 #include "include/codec/SkJpegDecoder.h"
 #include "include/codec/SkPngDecoder.h"
 #include "include/codec/SkWebpDecoder.h"
@@ -41,6 +42,7 @@ Image::~Image() = default;
 void Image::initializeCodecs() {
     static std::once_flag flag;
     std::call_once(flag, [&]() {
+        SkCodecs::Register(SkGifDecoder::Decoder());
         SkCodecs::Register(SkJpegDecoder::Decoder());
         SkCodecs::Register(SkPngDecoder::Decoder());
         SkCodecs::Register(SkWebpDecoder::Decoder());

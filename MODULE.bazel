@@ -428,6 +428,14 @@ http_archive(
 )
 
 http_archive(
+    name = "wuffs",
+    build_file = "@skia//bazel/external/wuffs:BUILD.bazel",
+    url = "https://github.com/google/wuffs-mirror-release-c/archive/e3f919ccfe3ef542cfc983a82146070258fb57f8.tar.gz",
+    strip_prefix = "wuffs-mirror-release-c-e3f919ccfe3ef542cfc983a82146070258fb57f8",
+    integrity = "sha256-6EnasfNy8Wt4K6dSjn9wKB41QlvS1kTJKjb7lZCfmNs=",
+)
+
+http_archive(
     name = "zlib_skia",
     build_file = "@skia//bazel/external/zlib_skia:BUILD.bazel",
     url = "https://github.com/gsource-mirror/chromium-src-third_party-zlib/archive/646b7f569718921d7d4b5b8e22572ff6c76f2596.tar.gz",

@@ -66,6 +66,7 @@ cc_library(
         "@harfbuzz",
         "@icu",
         "@skia//:core",
+        "@skia//:gif_decode_codec",
         "@skia//:jpeg_decode_codec",
         "@skia//:jpeg_encode_codec",
         "@skia//:png_decode_codec",
