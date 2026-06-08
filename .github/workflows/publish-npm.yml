@@ -109,7 +109,7 @@ jobs:
           bazel --version
           watchman --version
 
-      - name: Run release test (bootstrap from main, build iOS, test)
+      - name: Run release test (bootstrap with default pinned versions, build iOS, test)
         run: ./tools/ci/release_test.sh
 
   publish-cli:

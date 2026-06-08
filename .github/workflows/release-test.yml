@@ -1,6 +1,5 @@
-# Run before cutting a release: bootstrap an app from bleeding edge (main) of
-# the public GitHub Valdi/Valdi_Widgets, build and test. Ensures "if we cut a
-# release now, things won't fail."
+# Release test: bootstrap an app using the CLI's default pinned versions,
+# build and test. Validates the exact user experience of `valdi bootstrap`.
 name: Release Test (Public GitHub)
 
 on:
@@ -28,7 +27,7 @@ concurrency:
 
 jobs:
   release-test:
-    name: Bootstrap from main (bleeding edge), build & test
+    name: Bootstrap with default pinned versions, build & test
     runs-on: macos-latest
 
     steps:

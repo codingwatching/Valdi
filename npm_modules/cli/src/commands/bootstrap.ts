@@ -234,12 +234,19 @@ function applyLocalOverrides(localValdiPath: string) {
     `bazel_dep(name = "valdi", version = "0.1")\nlocal_path_override(module_name = "valdi", path = "${resolvedPath}")`,
   );
 
-  // Replace sub-module archive_overrides with local_path_override
+  // Replace sub-module archive_overrides with local_path_override, or strip
+  // them entirely if the sub-module no longer exists in the local checkout
   for (const sub of VALDI_SUB_MODULES) {
-    content = content.replace(
-      new RegExp(`bazel_dep\\(name = "${sub.name}"\\)\\narchive_override\\(module_name = "${sub.name}".*\\)`),
-      `bazel_dep(name = "${sub.name}")\nlocal_path_override(module_name = "${sub.name}", path = "${resolvedPath}/${sub.subPath}")`,
-    );
+    const subModuleBazel = path.join(resolvedPath, sub.subPath, 'MODULE.bazel');
+    const regex = new RegExp(`\\nbazel_dep\\(name = "${sub.name}"\\)\\narchive_override\\(module_name = "${sub.name}".*\\)`);
+    if (fs.existsSync(subModuleBazel)) {
+      content = content.replace(
+        regex,
+        `\nbazel_dep(name = "${sub.name}")\nlocal_path_override(module_name = "${sub.name}", path = "${resolvedPath}/${sub.subPath}")`,
+      );
+    } else {
+      content = content.replace(regex, '');
+    }
   }
 
   // Remove Widgets section entirely in local mode (not available locally)
