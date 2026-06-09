@@ -16,6 +16,8 @@ valdi_module(
         "tsconfig.json",
     ],
     android_output_target = "debug",
+    has_android_exports = False,
+    has_ios_exports = False,
     ios_module_name = "SCCValdiWebComponent",
     ios_output_target = "debug",
     res = glob([
@@ -26,7 +28,7 @@ valdi_module(
         "res/**/*.ttf",
         "res/**/*.webp",
     ]),
-    single_file_codegen = False,
+    single_file_codegen = True,
     strings_dir = "strings",
     visibility = ["//visibility:public"],
     deps = [
