@@ -27,6 +27,11 @@
 #pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
 #pragma clang diagnostic ignored "-Wgnu-statement-expression"
 
+@interface SCValdiRuntimeManager (TestExposure)
+- (void)_willEnterForeground;
+- (void)_didEnterBackground;
+@end
+
 @interface SCCValdiTestListenerImpl: NSObject<SCCValdiTestListener>
 
 @property (copy, nonatomic) dispatch_block_t onRenderCallback;
@@ -662,6 +667,33 @@
 {
     SCValdiLabel *label = [[SCValdiLabel alloc] initWithFrame:CGRectMake(0, 0, 200, 44)];
     XCTAssertTrue([label willEnqueueIntoValdiPool]);
+}
+
+- (void)testSystemForegroundNotificationTriggersResume
+{
+    // Force initialization so notification observers are registered.
+    (void)self.runtimeManager.mainRuntime;
+
+    id partialMock = OCMPartialMock(self.runtimeManager);
+    OCMExpect([partialMock _willEnterForeground]);
+
+    [[NSNotificationCenter defaultCenter] postNotificationName:UIApplicationWillEnterForegroundNotification object:nil];
+
+    OCMVerifyAll(partialMock);
+    [partialMock stopMocking];
+}
+
+- (void)testSystemBackgroundNotificationTriggersPause
+{
+    (void)self.runtimeManager.mainRuntime;
+
+    id partialMock = OCMPartialMock(self.runtimeManager);
+    OCMExpect([partialMock _didEnterBackground]);
+
+    [[NSNotificationCenter defaultCenter] postNotificationName:UIApplicationDidEnterBackgroundNotification object:nil];
+
+    OCMVerifyAll(partialMock);
+    [partialMock stopMocking];
 }
 
 @end

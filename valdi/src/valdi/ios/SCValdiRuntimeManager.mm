@@ -53,6 +53,12 @@
 #import <memory>
 #import <utils/debugging/Assert.hpp>
 
+// Weak definition: defaults to the standard UIKit foreground notification.
+// A host app that provides a strong definition (e.g. Snapchat's SceneDelegate
+// migration via SCMainAppSceneDelegate) overrides this at link time.
+__attribute__((weak)) NSNotificationName SCLegacyUIApplicationWillEnterForegroundNotification =
+    @"UIApplicationWillEnterForegroundNotification";
+
 Valdi::StringBox resolveDocumentsDirectory() {
     NSString *documentsDir = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
     if (!documentsDir) {
@@ -222,7 +228,7 @@ static void updateRuntimeManagersArray(void (^callback)(NSMutableArray<NSValue *
 
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(_willEnterForeground)
-                                                     name:@"SCLegacyUIApplicationWillEnterForegroundNotification"
+                                                     name:SCLegacyUIApplicationWillEnterForegroundNotification
                                                    object:nil];
 
         [[NSNotificationCenter defaultCenter] addObserver:self
