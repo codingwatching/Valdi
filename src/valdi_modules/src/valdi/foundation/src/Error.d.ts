@@ -1,5 +1,5 @@
 /**
- * @ExportModel({ios: 'SCValdiFoundationError', android: 'com.snap.valdi.foundation.Error'})
+ * @ExportModel({ios: 'SCValdiFoundationError', android: 'com.snap.modules.foundation.Error'})
  */
 export interface Error {
   // contains the error message

@@ -1,5 +1,5 @@
 /**
- * @ExportModel({ios: 'SCValdiFoundationLong', android: 'com.snap.valdi.foundation.Long'})
+ * @ExportModel({ios: 'SCValdiFoundationLong', android: 'com.snap.modules.foundation.Long'})
  */
 export interface NativeLong {
   /** Unsigned int32 */
