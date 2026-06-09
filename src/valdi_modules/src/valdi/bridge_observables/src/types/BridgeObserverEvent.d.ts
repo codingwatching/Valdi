@@ -2,7 +2,7 @@
  * @ExportEnum({
  *  ios: 'SCBridgeObserverEvent',
  *  swift: 'BridgeObserverEvent',
- *  android: 'com.snap.valdi.bridge_observables.BridgeObserverEvent'
+ *  android: 'com.snap.modules.bridge_observables.BridgeObserverEvent'
  * })
  */
 export const enum BridgeObserverEvent {

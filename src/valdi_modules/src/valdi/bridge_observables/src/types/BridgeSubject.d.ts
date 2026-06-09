@@ -5,7 +5,7 @@ import { BridgeObserverEvent } from './BridgeObserverEvent';
  * @ExportModel({
  *  ios: 'SCBridgeSubject',
  *  swift: 'BridgeSubject',
- *  android: 'com.snap.valdi.bridge_observables.BridgeSubject'
+ *  android: 'com.snap.modules.bridge_observables.BridgeSubject'
  * })
  */
 export interface BridgeSubject<T> {

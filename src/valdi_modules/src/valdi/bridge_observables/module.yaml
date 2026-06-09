@@ -1,0 +1,15 @@
+single_file_codegen: true
+
+ios:
+  class_prefix: SCCBridgeObservables
+  module_name: SCCBridgeObservables
+  language: objc, swift
+
+android:
+  class_path: com.snap.modules.bridge_observables
+
+output_target: release
+
+dependencies:
+  - valdi_core
+  - valdi_rxjs

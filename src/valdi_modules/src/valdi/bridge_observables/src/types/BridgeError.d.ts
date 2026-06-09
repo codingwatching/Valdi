@@ -2,7 +2,7 @@
  * @ExportModel({
  *  ios: 'SCBridgeError',
  *  swift: 'BridgeError',
- *  android: 'com.snap.valdi.bridge_observables.BridgeError'
+ *  android: 'com.snap.modules.bridge_observables.BridgeError'
  * })
  */
 export interface BridgeError {
