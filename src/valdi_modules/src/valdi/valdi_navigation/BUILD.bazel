@@ -8,10 +8,11 @@ valdi_module(
         "test/**/*.ts",
         "test/**/*.tsx",
     ]),
+    android_class_path = "com.snap.modules.valdi_navigation",
     android_output_target = "release",
     ios_module_name = "SCCValdiNavigation",
     ios_output_target = "release",
-    single_file_codegen = False,
+    single_file_codegen = True,
     visibility = ["//visibility:public"],
     deps = [
         "@valdi//src/valdi_modules/src/valdi/foundation",
