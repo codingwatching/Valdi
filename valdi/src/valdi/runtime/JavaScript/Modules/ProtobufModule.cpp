@@ -787,6 +787,10 @@ JSValueRef ProtobufModule::arenaSetMessageField(JSFunctionNativeCallContext& cal
     auto fieldIndex = getIndex(callContext, 2);
     CHECK_CALL_CONTEXT(callContext);
 
+    // Serialize descriptor access (e.g. message_type() on message-typed fields) against
+    // concurrent lazy DescriptorPool mutation from other JS runtimes.
+    auto factoryLocks = arenaResult->lockRetainedMessageFactories();
+
     auto message = arenaResult->getMessage(messageIndex, callContext.getExceptionTracker());
     CHECK_CALL_CONTEXT(callContext);
 
@@ -812,6 +816,10 @@ JSValueRef ProtobufModule::arenaGetMessageFields(JSFunctionNativeCallContext& ca
 
     auto messageIndex = getIndex(callContext, 1);
     CHECK_CALL_CONTEXT(callContext);
+
+    // Serialize descriptor access (e.g. message_type() on message-typed fields) against
+    // concurrent lazy DescriptorPool mutation from other JS runtimes.
+    auto factoryLocks = arena->lockRetainedMessageFactories();
 
     auto* message = arena->getMessage(messageIndex, callContext.getExceptionTracker());
     CHECK_CALL_CONTEXT(callContext);

@@ -44,6 +44,16 @@ public:
 
     std::unique_lock<std::recursive_mutex> lock() const;
 
+    // Locks every retained message factory so that any access to descriptors from their
+    // shared, non-thread-safe DescriptorPool — including lazy dependency resolution
+    // triggered by accessors such as FieldDescriptor::message_type() during field
+    // get/set, encoding, postprocessing, or JSON serialization — is serialized against
+    // concurrent pool mutation from other JS runtimes. Used by callers operating on an
+    // existing message that do not receive a ProtobufMessageFactory directly. Factories
+    // are locked in a stable address order so locking more than one (rare) cannot
+    // deadlock against another thread doing the same.
+    std::vector<std::unique_lock<std::recursive_mutex>> lockRetainedMessageFactories() const;
+
     size_t createMessage(const Ref<ProtobufMessageFactory>& messageFactory,
                          size_t descriptorIndex,
                          ExceptionTracker& exceptionTracker);

@@ -8,6 +8,9 @@
 #include "valdi/runtime/JavaScript/Modules/ProtobufArena.hpp"
 #include "valdi_core/cpp/Utils/Trace.hpp"
 
+#include <algorithm>
+#include <functional>
+
 namespace Valdi {
 
 JSProtobufMessage::JSProtobufMessage(size_t messageIndex,
@@ -29,9 +32,36 @@ std::unique_lock<std::recursive_mutex> ProtobufArena::lock() const {
     return std::unique_lock<std::recursive_mutex>(_mutex);
 }
 
+std::vector<std::unique_lock<std::recursive_mutex>> ProtobufArena::lockRetainedMessageFactories() const {
+    // Lock factories in a stable address order so that concurrently locking more than
+    // one factory (only possible when an arena retains multiple, e.g. via copyMessage)
+    // cannot deadlock against another thread acquiring them in the opposite order.
+    std::vector<ProtobufMessageFactory*> ordered;
+    ordered.reserve(_retainedMessageFactories.size());
+    for (const auto& factory : _retainedMessageFactories) {
+        ordered.emplace_back(factory.get());
+    }
+    // Use std::less rather than the default operator< : the built-in operator< on
+    // pointers to unrelated objects is unspecified, whereas std::less is guaranteed to
+    // yield a strict total order over pointers — which is what makes the ordering safe.
+    std::sort(ordered.begin(), ordered.end(), std::less<>{});
+
+    std::vector<std::unique_lock<std::recursive_mutex>> locks;
+    locks.reserve(ordered.size());
+    for (auto* factory : ordered) {
+        locks.emplace_back(factory->lock());
+    }
+    return locks;
+}
+
 size_t ProtobufArena::createMessage(const Ref<ProtobufMessageFactory>& messageFactory,
                                     size_t descriptorIndex,
                                     ExceptionTracker& exceptionTracker) {
+    // Serialize access to the factory's shared, non-thread-safe DescriptorPool for the
+    // whole operation: descriptor lookup may lazily build dependencies, and later field
+    // access (e.g. during encoding) reads metadata that resolves message types on demand.
+    auto factoryLock = messageFactory->lock();
+
     const auto* descriptor = messageFactory->getDescriptorAtIndex(descriptorIndex, exceptionTracker);
     if (descriptor == nullptr) {
         return 0;
@@ -46,6 +76,10 @@ size_t ProtobufArena::decodeMessage(const Ref<ProtobufMessageFactory>& messageFa
                                     const BytesView& bytes,
                                     bool isFromAsyncCall,
                                     ExceptionTracker& exceptionTracker) {
+    // Hold the factory lock across the whole decode: postprocess() reads descriptor field
+    // metadata (e.g. FieldDescriptor::message_type()) which lazily mutates the shared pool.
+    auto factoryLock = messageFactory->lock();
+
     const auto* descriptor = messageFactory->getDescriptorAtIndex(descriptorIndex, exceptionTracker);
     if (descriptor == nullptr) {
         return 0;
@@ -67,6 +101,10 @@ size_t ProtobufArena::decodeMessageFromJSON(const Ref<ProtobufMessageFactory>& m
                                             std::string_view json,
                                             bool isFromAsyncCall,
                                             ExceptionTracker& exceptionTracker) {
+    // Hold the factory lock across the whole decode: JSON parsing and postprocess() read
+    // descriptor field metadata that lazily mutates the shared pool.
+    auto factoryLock = messageFactory->lock();
+
     const auto* descriptor = messageFactory->getDescriptorAtIndex(descriptorIndex, exceptionTracker);
     if (descriptor == nullptr) {
         return 0;
@@ -120,6 +158,11 @@ BytesView ProtobufArena::encodeMessage(size_t messageIndex, ExceptionTracker& ex
 
     VALDI_TRACE_META("Protobuf.encodeMessage", message->getDescriptor()->name());
 
+    // Encoding walks the message's descriptor and may trigger first-time lazy resolution
+    // of message types (e.g. for messages created/decoded without postprocess) from the
+    // shared pool, so it must be serialized against concurrent pool access.
+    auto factoryLocks = lockRetainedMessageFactories();
+
     return message->encode(_includeAllFieldsDuringEncoding);
 }
 
@@ -127,6 +170,10 @@ size_t ProtobufArena::fieldToMessageIndex(JSProtobufMessage& message,
                                           Protobuf::Field& field,
                                           const google::protobuf::Descriptor* descriptor,
                                           ExceptionTracker& exceptionTracker) {
+    // Lazily decoding a nested message reads the nested descriptor's metadata, which can
+    // lazily mutate the shared pool; serialize against concurrent pool access.
+    auto factoryLocks = lockRetainedMessageFactories();
+
     auto raw = field.getRaw();
     if (raw.data != nullptr) {
         // Parse the bytes of the message into a concrete message instance
@@ -162,6 +209,10 @@ size_t ProtobufArena::copyMessage(const ProtobufArena& fromArena,
 
     VALDI_TRACE_META("Protobuf.copyMessage", message->getDescriptor()->name());
 
+    // The descriptors driving the encode/decode below belong to the source arena's
+    // factories' pool; serialize access to it against concurrent pool mutation.
+    auto factoryLocks = fromArena.lockRetainedMessageFactories();
+
     auto encoded = message->encode(_includeAllFieldsDuringEncoding);
 
     // Also retain the message factories
@@ -185,6 +236,10 @@ std::string ProtobufArena::messageToJSON(size_t messageIndex,
     if (!exceptionTracker) {
         return "";
     }
+
+    // toJSON() builds a TypeResolver over the descriptor's pool and may call
+    // FindMessageTypeByName (a pool mutation); serialize against concurrent pool access.
+    auto factoryLocks = lockRetainedMessageFactories();
 
     return message->toJSON(printOptions, exceptionTracker);
 }
