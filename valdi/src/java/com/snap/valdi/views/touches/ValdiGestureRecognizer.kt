@@ -160,8 +160,13 @@ abstract class ValdiGestureRecognizer(val view: View) {
         onProcess()
     }
 
-    val viewIdentifier: String = "${view::class.java.simpleName}-${System.identityHashCode(view)}"
-    val gestureIdentifier = "${this::class.java.simpleName}-${System.identityHashCode(this)}"
+    // Debug-only identifiers used by toString()/logging. Computed on access (no backing field) so we
+    // don't pay getSimpleName() + String allocation for every recognizer constructed during layout.
+    val viewIdentifier: String
+        get() = "${view::class.java.simpleName}-${System.identityHashCode(view)}"
+    val gestureIdentifier: String
+        get() = "${this::class.java.simpleName}-${System.identityHashCode(this)}"
+
     fun cancel(event: MotionEvent) {
         pointerCount = event.pointerCount
         if (wasProcessed && state != ValdiGestureRecognizerState.ENDED) {
