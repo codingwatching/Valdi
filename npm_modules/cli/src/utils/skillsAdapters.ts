@@ -29,90 +29,72 @@ function copyDirSync(src: string, dst: string): void {
   }
 }
 
-const CLAUDE_PLUGIN_NAME = 'valdi@local';
-const CLAUDE_PLUGIN_VERSION = '1.0.0';
-
-/** Plugin keys to remove from installed_plugins.json during install (prevents conflicts). */
+/** Kept for backwards compatibility with cli-sc's index.ts (no-op). */
 export const conflictingClaudePluginKeys: string[] = [];
 
-function getClaudePluginInstallPath(): string {
-  return path.join(
-    os.homedir(),
-    '.claude',
-    'plugins',
-    'cache',
-    'local',
-    'valdi',
-    CLAUDE_PLUGIN_VERSION,
-  );
+function getClaudeSkillsDir(): string {
+  return path.join(os.homedir(), '.claude', 'skills');
 }
 
-function ensureClaudePluginManifest(): void {
-  const installPath = getClaudePluginInstallPath();
-  const manifestDir = path.join(installPath, '.claude-plugin');
-  const manifestFile = path.join(manifestDir, 'plugin.json');
-  fs.mkdirSync(manifestDir, { recursive: true });
-  fs.writeFileSync(
-    manifestFile,
-    JSON.stringify(
-      {
-        name: 'valdi',
-        description: 'Valdi framework AI skills for development in the Snap monorepo',
-        version: CLAUDE_PLUGIN_VERSION,
-      },
-      null,
-      2,
-    ),
-    'utf8',
-  );
-}
+// Remove leftover artifacts from the old plugin/marketplace approach (<=1.3.4).
+function cleanupLegacyPluginArtifacts(): void {
+  const claudeDir = path.join(os.homedir(), '.claude');
+  const valdiPluginDir = path.join(claudeDir, 'plugins', 'local', 'valdi');
+  if (fs.existsSync(valdiPluginDir)) {
+    fs.rmSync(valdiPluginDir, { recursive: true, force: true });
+  }
+  const valdiCacheDir = path.join(claudeDir, 'plugins', 'cache', 'local', 'valdi');
+  if (fs.existsSync(valdiCacheDir)) {
+    fs.rmSync(valdiCacheDir, { recursive: true, force: true });
+  }
 
-function ensureClaudePluginRegistered(): void {
-  const pluginsFile = path.join(os.homedir(), '.claude', 'plugins', 'installed_plugins.json');
-  const installPath = getClaudePluginInstallPath();
-
-  let data: { version: number; plugins: Record<string, unknown[]> } = { version: 2, plugins: {} };
-  if (fs.existsSync(pluginsFile)) {
+  const installedPath = path.join(claudeDir, 'plugins', 'installed_plugins.json');
+  if (fs.existsSync(installedPath)) {
     try {
-      const parsed = JSON.parse(fs.readFileSync(pluginsFile, 'utf8'));
-      if (parsed && parsed.plugins) data = parsed;
+      const data = JSON.parse(fs.readFileSync(installedPath, 'utf8'));
+      if (Array.isArray(data)) {
+        const filtered = data.filter(
+          (entry: { key?: string }) => !entry.key?.startsWith('valdi'),
+        );
+        if (filtered.length !== data.length) {
+          fs.writeFileSync(installedPath, JSON.stringify(filtered, null, 2), 'utf8');
+        }
+      }
     } catch {
-      // Start fresh if file is corrupted
+      // Corrupt file — leave it alone
     }
   }
 
-  const now = new Date().toISOString();
-  const entry = {
-    scope: 'user',
-    installPath,
-    version: CLAUDE_PLUGIN_VERSION,
-    installedAt: now,
-    lastUpdated: now,
-  };
-
-  for (const key of conflictingClaudePluginKeys) {
-    if (data.plugins[key]) {
-      delete data.plugins[key];
-      console.log(`Removed conflicting ${key} plugin (this install provides all skills).`);
+  const settingsPath = path.join(claudeDir, 'settings.json');
+  if (fs.existsSync(settingsPath)) {
+    try {
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      let changed = false;
+      if (Array.isArray(settings.enabledPlugins)) {
+        const before = settings.enabledPlugins.length;
+        settings.enabledPlugins = settings.enabledPlugins.filter(
+          (p: string) => !p.includes('valdi'),
+        );
+        if (settings.enabledPlugins.length === 0) delete settings.enabledPlugins;
+        if ((settings.enabledPlugins?.length ?? 0) !== before) changed = true;
+      }
+      if (Array.isArray(settings.extraKnownMarketplaces)) {
+        const before = settings.extraKnownMarketplaces.length;
+        settings.extraKnownMarketplaces = settings.extraKnownMarketplaces.filter(
+          (m: { name?: string }) => m.name !== 'local',
+        );
+        if (settings.extraKnownMarketplaces.length === 0) delete settings.extraKnownMarketplaces;
+        if ((settings.extraKnownMarketplaces?.length ?? 0) !== before) changed = true;
+      }
+      if (changed) {
+        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
+      }
+    } catch {
+      // Corrupt file — leave it alone
     }
   }
-
-  const existing = data.plugins[CLAUDE_PLUGIN_NAME] as Array<{ installPath: string; lastUpdated: string }> | undefined;
-  if (existing && existing.length > 0) {
-    existing[0]!.installPath = installPath;
-    existing[0]!.lastUpdated = now;
-  } else {
-    data.plugins[CLAUDE_PLUGIN_NAME] = [entry];
-  }
-
-  fs.mkdirSync(path.dirname(pluginsFile), { recursive: true });
-  fs.writeFileSync(pluginsFile, JSON.stringify(data, null, 4), 'utf8');
-
-  ensureClaudePluginManifest();
 }
 
-// ClaudeCodeAdapter: installs to ~/.claude/plugins/cache/local/valdi/<version>/skills/<name>/SKILL.md
-// and registers the plugin in ~/.claude/plugins/installed_plugins.json
 const ClaudeCodeAdapter: SkillAdapter = {
   name: 'claude',
   detect() {
@@ -120,13 +102,12 @@ const ClaudeCodeAdapter: SkillAdapter = {
     return fs.existsSync(claudeDir);
   },
   install(skillName: string, content: string, meta: SkillMeta, resourceDir?: string) {
-    const installPath = getClaudePluginInstallPath();
-    const skillDir = path.join(installPath, 'skills', skillName);
+    cleanupLegacyPluginArtifacts();
+    const skillDir = path.join(getClaudeSkillsDir(), skillName);
     fs.mkdirSync(skillDir, { recursive: true });
     const frontmatter = `---\nname: ${meta.name}\ndescription: ${meta.description}\n---\n\n`;
     fs.writeFileSync(path.join(skillDir, 'SKILL.md'), frontmatter + content, 'utf8');
 
-    // Copy resource subdirectories (e.g. scripts/) so <skill_dir>/scripts/diff.py works
     if (resourceDir) {
       for (const entry of fs.readdirSync(resourceDir, { withFileTypes: true })) {
         if (entry.isDirectory()) {
@@ -134,19 +115,15 @@ const ClaudeCodeAdapter: SkillAdapter = {
         }
       }
     }
-
-    ensureClaudePluginRegistered();
   },
   remove(skillName: string) {
-    const installPath = getClaudePluginInstallPath();
-    const skillDir = path.join(installPath, 'skills', skillName);
+    const skillDir = path.join(getClaudeSkillsDir(), skillName);
     if (fs.existsSync(skillDir)) {
       fs.rmSync(skillDir, { recursive: true, force: true });
     }
   },
   listInstalled() {
-    const installPath = getClaudePluginInstallPath();
-    const skillsDir = path.join(installPath, 'skills');
+    const skillsDir = getClaudeSkillsDir();
     if (!fs.existsSync(skillsDir)) return [];
     return fs
       .readdirSync(skillsDir)

@@ -2,7 +2,7 @@ import 'jasmine';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { getAdapterByName, conflictingClaudePluginKeys } from './skillsAdapters';
+import { getAdapterByName } from './skillsAdapters';
 
 describe('ClaudeCodeAdapter', () => {
   let tmpHome: string;
@@ -26,30 +26,11 @@ describe('ClaudeCodeAdapter', () => {
     return adapter!;
   }
 
-  it('writes plugin.json manifest on install', () => {
-    const adapter = getAdapter();
-    adapter.install('test-skill', '# Test content', { name: 'test-skill', description: 'A test skill', tags: [], path: '', category: [] });
-
-    const manifestPath = path.join(
-      tmpHome, '.claude', 'plugins', 'cache', 'local', 'valdi', '1.0.0',
-      '.claude-plugin', 'plugin.json',
-    );
-    expect(fs.existsSync(manifestPath)).toBe(true);
-
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-    expect(manifest.name).toBe('valdi');
-    expect(manifest.version).toBe('1.0.0');
-    expect(manifest.description).toBeDefined();
-  });
-
-  it('writes SKILL.md with frontmatter', () => {
+  it('writes SKILL.md with frontmatter to ~/.claude/skills/', () => {
     const adapter = getAdapter();
     adapter.install('my-skill', '# My content', { name: 'my-skill', description: 'Desc', tags: [], path: '', category: [] });
 
-    const skillPath = path.join(
-      tmpHome, '.claude', 'plugins', 'cache', 'local', 'valdi', '1.0.0',
-      'skills', 'my-skill', 'SKILL.md',
-    );
+    const skillPath = path.join(tmpHome, '.claude', 'skills', 'my-skill', 'SKILL.md');
     expect(fs.existsSync(skillPath)).toBe(true);
 
     const content = fs.readFileSync(skillPath, 'utf8');
@@ -58,16 +39,15 @@ describe('ClaudeCodeAdapter', () => {
     expect(content).toContain('# My content');
   });
 
-  it('registers plugin in installed_plugins.json', () => {
+  it('does not modify settings.json', () => {
+    const settingsFile = path.join(tmpHome, '.claude', 'settings.json');
+    fs.writeFileSync(settingsFile, JSON.stringify({ model: 'claude-opus-4-6' }), 'utf8');
+
     const adapter = getAdapter();
     adapter.install('test-skill', '# Content', { name: 'test-skill', description: 'Desc', tags: [], path: '', category: [] });
 
-    const pluginsFile = path.join(tmpHome, '.claude', 'plugins', 'installed_plugins.json');
-    expect(fs.existsSync(pluginsFile)).toBe(true);
-
-    const data = JSON.parse(fs.readFileSync(pluginsFile, 'utf8'));
-    expect(data.plugins['valdi@local']).toBeDefined();
-    expect(data.plugins['valdi@local'][0].installPath).toContain('cache/local/valdi/1.0.0');
+    const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+    expect(settings).toEqual({ model: 'claude-opus-4-6' });
   });
 
   it('lists installed skills', () => {
@@ -78,28 +58,6 @@ describe('ClaudeCodeAdapter', () => {
     const installed = adapter.listInstalled();
     expect(installed).toContain('skill-a');
     expect(installed).toContain('skill-b');
-  });
-
-  it('removes conflicting plugin keys during install', () => {
-    conflictingClaudePluginKeys.push('other-valdi@some-marketplace');
-
-    const pluginsFile = path.join(tmpHome, '.claude', 'plugins', 'installed_plugins.json');
-    fs.mkdirSync(path.dirname(pluginsFile), { recursive: true });
-    fs.writeFileSync(pluginsFile, JSON.stringify({
-      version: 2,
-      plugins: {
-        'other-valdi@some-marketplace': [{ scope: 'user', installPath: '/old/path', version: '1.0.0' }],
-      },
-    }), 'utf8');
-
-    const adapter = getAdapter();
-    adapter.install('test-skill', '# Content', { name: 'test-skill', description: 'Desc', tags: [], path: '', category: [] });
-
-    const data = JSON.parse(fs.readFileSync(pluginsFile, 'utf8'));
-    expect(data.plugins['other-valdi@some-marketplace']).toBeUndefined();
-    expect(data.plugins['valdi@local']).toBeDefined();
-
-    conflictingClaudePluginKeys.pop();
   });
 
   it('removes a skill', () => {
