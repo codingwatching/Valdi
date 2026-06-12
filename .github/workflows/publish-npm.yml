@@ -127,8 +127,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Upgrade npm for trusted publishing (requires >=11.5.1)
+        run: npm install -g npm@latest && npm --version
 
       - name: Install dependencies
         run: npm ci
@@ -154,8 +157,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Upgrade npm for trusted publishing (requires >=11.5.1)
+        run: npm install -g npm@latest && npm --version
 
       - name: Install dependencies
         run: npm ci
