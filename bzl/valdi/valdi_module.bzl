@@ -19,9 +19,6 @@ load(
     "IOS_OUTPUT_BASE",
     "IOS_SWIFT_SUFFIX",
 )
-load(":extract_cpp_srcs.bzl", "extract_cpp_srcs")
-load(":extract_objc_srcs.bzl", "extract_objc_srcs")
-load(":extract_swift_srcs.bzl", "extract_swift_srcs")
 load(":generate_android_manifest.bzl", "generate_android_manifest")
 load(":valdi_compiled.bzl", "valdi_compiled", _valdi_hotreload = "valdi_hotreload")
 load(":valdi_module_info_extractor.bzl", "extract_transitive_valdi_module_output", "extract_valdi_module_native_output", "extract_valdi_module_output")
@@ -141,6 +138,9 @@ def valdi_module(
         **kwargs: Additional keyword arguments.
     """
     downloadable_assets = True if downloadable_assets == None else downloadable_assets
+
+    if not single_file_codegen:
+        fail("single_file_codegen=False is no longer supported. All modules must use single_file_codegen=True (COMPOSER-3173).")
 
     if not ios_module_name:
         ios_module_name = name
@@ -538,181 +538,102 @@ def _setup_ios_target(name, module_deps, ios_deps, compiled_module_target, ios_m
         release = "release",
     )
 
-    if single_file_codegen:
-        extract_valdi_module_output(
-            name = "ios.debug.hdrs",
+    extract_valdi_module_output(
+        name = "ios.debug.hdrs",
+        compiled_module = compiled_module_target,
+        output_name = "ios_debug_generated_hdrs",
+    )
+
+    extract_valdi_module_output(
+        name = "ios.release.hdrs",
+        compiled_module = compiled_module_target,
+        output_name = "ios_release_generated_hdrs",
+    )
+
+    extract_valdi_module_output(
+        name = "ios.debug.api.hdrs",
+        compiled_module = compiled_module_target,
+        output_name = "ios_debug_api_generated_hdrs",
+    )
+
+    extract_valdi_module_output(
+        name = "ios.release.api.hdrs",
+        compiled_module = compiled_module_target,
+        output_name = "ios_release_api_generated_hdrs",
+    )
+
+    api_objc_hdrs = []
+    api_objc_srcs = []
+    objc_hdrs = []
+    objc_srcs = []
+    swift_srcs = []
+
+    if "swift" in ios_language:
+        extract_valdi_module_native_output(
+            name = "ios.debug.swift_srcs",
             compiled_module = compiled_module_target,
-            output_name = "ios_debug_generated_hdrs",
+            output_name = "ios_debug_generated_swift_srcs",
         )
 
-        extract_valdi_module_output(
-            name = "ios.release.hdrs",
+        extract_valdi_module_native_output(
+            name = "ios.release.swift_srcs",
             compiled_module = compiled_module_target,
-            output_name = "ios_release_generated_hdrs",
+            output_name = "ios_release_generated_swift_srcs",
         )
 
-        extract_valdi_module_output(
-            name = "ios.debug.api.hdrs",
+        extract_valdi_module_native_output(
+            name = "ios.debug.api.swift_srcs",
             compiled_module = compiled_module_target,
-            output_name = "ios_debug_api_generated_hdrs",
+            output_name = "ios_debug_api_generated_swift_srcs",
         )
 
-        extract_valdi_module_output(
-            name = "ios.release.api.hdrs",
+        extract_valdi_module_native_output(
+            name = "ios.release.api.swift_srcs",
             compiled_module = compiled_module_target,
-            output_name = "ios_release_api_generated_hdrs",
+            output_name = "ios_release_api_generated_swift_srcs",
         )
 
-        api_objc_hdrs = []
-        api_objc_srcs = []
-        objc_hdrs = []
-        objc_srcs = []
-        swift_srcs = []
-
-        if "swift" in ios_language:
-            extract_valdi_module_native_output(
-                name = "ios.debug.swift_srcs",
-                compiled_module = compiled_module_target,
-                output_name = "ios_debug_generated_swift_srcs",
-            )
-
-            extract_valdi_module_native_output(
-                name = "ios.release.swift_srcs",
-                compiled_module = compiled_module_target,
-                output_name = "ios_release_generated_swift_srcs",
-            )
-
-            extract_valdi_module_native_output(
-                name = "ios.debug.api.swift_srcs",
-                compiled_module = compiled_module_target,
-                output_name = "ios_debug_api_generated_swift_srcs",
-            )
-
-            extract_valdi_module_native_output(
-                name = "ios.release.api.swift_srcs",
-                compiled_module = compiled_module_target,
-                output_name = "ios_release_api_generated_swift_srcs",
-            )
-
-            swift_srcs = source_set_select(
-                debug = [":ios.debug.swift_srcs", ":ios.debug.api.swift_srcs"],
-                release = [":ios.release.swift_srcs", ":ios.release.api.swift_srcs"],
-            )
-        else:
-            swift_srcs = ["@valdi//bzl/valdi:empty.swift"]
-        if "objc" in ios_language:
-            api_objc_hdrs = source_set_select(
-                debug = [":ios.debug.api.hdrs"],
-                release = [":ios.release.api.hdrs"],
-            )
-            api_objc_srcs = source_set_select(
-                debug = [":ios.debug.api.srcs"],
-                release = [":ios.release.api.srcs"],
-            )
-            objc_hdrs = source_set_select(
-                debug = [":ios.debug.hdrs"],
-                release = [":ios.release.hdrs"],
-            )
-            objc_srcs = source_set_select(
-                debug = [":ios.debug.srcs"],
-                release = [":ios.release.srcs"],
-            )
-
-        native.filegroup(
-            name = name + "_api_objc_hdrs",
-            srcs = api_objc_hdrs,
-            visibility = visibility,
-        )
-
-        native.filegroup(
-            name = name + "_objc_hdrs",
-            srcs = objc_hdrs,
-            visibility = visibility,
-        )
-
-        native.filegroup(
-            name = name + "_swift_srcs",
-            srcs = swift_srcs,
-            visibility = visibility,
+        swift_srcs = source_set_select(
+            debug = [":ios.debug.swift_srcs", ":ios.debug.api.swift_srcs"],
+            release = [":ios.release.swift_srcs", ":ios.release.api.swift_srcs"],
         )
     else:
-        api_objc_hdrs_name = name + "_api_objc_hdrs"
-        api_objc_srcs_name = name + "_api_objc_srcs"
-        objc_hdrs_name = name + "_objc_hdrs"
-        objc_srcs_name = name + "_objc_srcs"
-        swift_srcs_name = name + "_swift_srcs"
+        swift_srcs = ["@valdi//bzl/valdi:empty.swift"]
+    if "objc" in ios_language:
+        api_objc_hdrs = source_set_select(
+            debug = [":ios.debug.api.hdrs"],
+            release = [":ios.release.api.hdrs"],
+        )
+        api_objc_srcs = source_set_select(
+            debug = [":ios.debug.api.srcs"],
+            release = [":ios.release.api.srcs"],
+        )
+        objc_hdrs = source_set_select(
+            debug = [":ios.debug.hdrs"],
+            release = [":ios.release.hdrs"],
+        )
+        objc_srcs = source_set_select(
+            debug = [":ios.debug.srcs"],
+            release = [":ios.release.srcs"],
+        )
 
-        api_objc_hdrs = [native.package_relative_label(api_objc_hdrs_name)]
-        api_objc_srcs = [native.package_relative_label(api_objc_srcs_name)]
-        objc_hdrs = [native.package_relative_label(objc_hdrs_name)]
-        objc_srcs = [native.package_relative_label(objc_srcs_name)]
-        swift_srcs = [native.package_relative_label(swift_srcs_name)]
+    native.filegroup(
+        name = name + "_api_objc_hdrs",
+        srcs = api_objc_hdrs,
+        visibility = visibility,
+    )
 
-        # Only extract native sources if the module has iOS exports
-        if has_ios_exports:
-            extract_objc_srcs(
-                name = api_objc_hdrs_name,
-                compiled_module = compiled_module_target,
-                extension = ".h",
-                api_only = True,
-                selected_source_set = selected_source_set,
-                visibility = visibility,
-            )
+    native.filegroup(
+        name = name + "_objc_hdrs",
+        srcs = objc_hdrs,
+        visibility = visibility,
+    )
 
-            extract_objc_srcs(
-                name = api_objc_srcs_name,
-                compiled_module = compiled_module_target,
-                extension = ".m",
-                api_only = True,
-                selected_source_set = selected_source_set,
-            )
-
-            extract_objc_srcs(
-                name = objc_hdrs_name,
-                compiled_module = compiled_module_target,
-                extension = ".h",
-                api_only = False,
-                selected_source_set = selected_source_set,
-                visibility = visibility,
-            )
-
-            extract_objc_srcs(
-                name = objc_srcs_name,
-                compiled_module = compiled_module_target,
-                extension = ".m",
-                api_only = False,
-                selected_source_set = selected_source_set,
-            )
-
-            extract_swift_srcs(
-                name = swift_srcs_name,
-                compiled_module = compiled_module_target,
-                selected_source_set = selected_source_set,
-            )
-        else:
-            # Create empty filegroups when there are no exports
-            native.filegroup(
-                name = api_objc_hdrs_name,
-                srcs = [],
-                visibility = visibility,
-            )
-            native.filegroup(
-                name = api_objc_srcs_name,
-                srcs = [],
-            )
-            native.filegroup(
-                name = objc_hdrs_name,
-                srcs = [],
-                visibility = visibility,
-            )
-            native.filegroup(
-                name = objc_srcs_name,
-                srcs = [],
-            )
-            native.filegroup(
-                name = swift_srcs_name,
-                srcs = [],
-            )
+    native.filegroup(
+        name = name + "_swift_srcs",
+        srcs = swift_srcs,
+        visibility = visibility,
+    )
 
     # iOS target named {ios_module_name}
     resources = source_set_select(
@@ -1033,12 +954,8 @@ def _exported_objc_lib(name, ios_module_name, objc_hdrs, objc_srcs, single_file_
     # setup headermaps
     # When has_ios_exports is False, we use empty hdrs instead of header_tree_artifact_providers
     # because the headermap rule requires at least one tree artifact when using header_tree_artifact_providers
-    if single_file_codegen or not has_ios_exports:
-        hmap_hdrs = objc_hdrs if has_ios_exports else []
-        hmap_header_tree_providers = []
-    else:
-        hmap_hdrs = []
-        hmap_header_tree_providers = objc_hdrs
+    hmap_hdrs = objc_hdrs if has_ios_exports else []
+    hmap_header_tree_providers = []
 
     hmap_name = name + "_valdi_module_hmap"
     headermap(
@@ -1051,12 +968,8 @@ def _exported_objc_lib(name, ios_module_name, objc_hdrs, objc_srcs, single_file_
     hmap_deps = [native.package_relative_label(hmap_name)]
     hmap_copts = []
 
-    if single_file_codegen or not has_ios_exports:
-        private_hmap_hdrs = objc_hdrs if has_ios_exports else []
-        private_hmap_header_tree_providers = []
-    else:
-        private_hmap_hdrs = []
-        private_hmap_header_tree_providers = objc_hdrs
+    private_hmap_hdrs = objc_hdrs if has_ios_exports else []
+    private_hmap_header_tree_providers = []
 
     private_hmap_name = name + "_valdi_module_private_hmap"
     headermap(
@@ -1130,47 +1043,24 @@ def _setup_cpp_target(name, deps, compiled_module_target, visibility, single_fil
     cpp_strip_prefix = "cpp/release/src"
 
     # C++ codegen always outputs to release configuration
-    if single_file_codegen:
-        # For single file codegen, extract individual .cpp and .hpp files
-        extract_valdi_module_output(
-            name = "cpp.srcs",
-            compiled_module = compiled_module_target,
-            output_name = "cpp_srcs",
-        )
+    # For single file codegen, extract individual .cpp and .hpp files
+    extract_valdi_module_output(
+        name = "cpp.srcs",
+        compiled_module = compiled_module_target,
+        output_name = "cpp_srcs",
+    )
 
-        extract_valdi_module_output(
-            name = "cpp.hdrs",
-            compiled_module = compiled_module_target,
-            output_name = "cpp_hdrs",
-        )
+    extract_valdi_module_output(
+        name = "cpp.hdrs",
+        compiled_module = compiled_module_target,
+        output_name = "cpp_hdrs",
+    )
 
-        cpp_srcs = [":cpp.srcs"]
-        cpp_hdrs = [":cpp.hdrs"]
-    else:
-        # For multi-file codegen, use extract_cpp_srcs to filter by extension
-        cpp_srcs_name = name + "_cpp_srcs"
-        cpp_hdrs_name = name + "_cpp_hdrs"
-
-        extract_cpp_srcs(
-            name = cpp_srcs_name,
-            compiled_module = compiled_module_target,
-            extension = ".cpp",
-            strip_prefix = cpp_strip_prefix,
-        )
-
-        extract_cpp_srcs(
-            name = cpp_hdrs_name,
-            compiled_module = compiled_module_target,
-            extension = ".hpp",
-            strip_prefix = cpp_strip_prefix,
-        )
-
-        cpp_srcs = [native.package_relative_label(cpp_srcs_name)]
-        cpp_hdrs = [native.package_relative_label(cpp_hdrs_name)]
+    cpp_srcs = [":cpp.srcs"]
+    cpp_hdrs = [":cpp.hdrs"]
 
     # C++ codegen always outputs to release configuration.
-    # Both single_file_codegen and multi-file codegen strip the cpp/release/src/ prefix
-    # so that #include "valdi_modules/..." works correctly.
+    # Strip the cpp/release/src/ prefix so that #include "valdi_modules/..." works correctly.
     cc_library_kwargs = {
         "name": name + "_cpp",
         "srcs": cpp_srcs,
@@ -1179,13 +1069,7 @@ def _setup_cpp_target(name, deps, compiled_module_target, visibility, single_fil
         "visibility": visibility,
     }
 
-    if single_file_codegen:
-        # For single file mode, strip via cc_library's strip_include_prefix
-        cc_library_kwargs["strip_include_prefix"] = cpp_strip_prefix
-    else:
-        # For multi-file mode, the extracted directory contains subdirectories
-        # We need to add it as an include path
-        cc_library_kwargs["includes"] = [name + "_cpp_hdrs"]
+    cc_library_kwargs["strip_include_prefix"] = cpp_strip_prefix
 
     native.cc_library(**cc_library_kwargs)
 

@@ -128,6 +128,9 @@ def _valdi_compiled_impl(ctx):
     if directory_name != ctx.label.name:
         fail("Valdi module name must match the name of the directory where the valdi_module() target is defined (expected directory name '{}', found '{}')".format(ctx.label.name, directory_name))
 
+    if not ctx.attr.single_file_codegen:
+        fail("single_file_codegen=False is no longer supported. All modules must use single_file_codegen=True (COMPOSER-3173).")
+
     (module_yaml, module_definition) = _resolve_module_yaml(ctx, module_name)
 
     # NPM scoped module names are postfixed with its scope during compilation
@@ -162,16 +165,6 @@ def _valdi_compiled_impl(ctx):
         emit_release = True
 
     outputs = _invoke_valdi_compiler(ctx, module_name, module_yaml, enable_android, enable_ios, emit_debug, emit_release)
-
-    if not ctx.attr.single_file_codegen and ctx.attr.has_android_exports and enable_android:
-        # Compute the set of Android variants that were actually declared for this module,
-        # so _compress_generated_android_srcs zips exactly those src directories.
-        android_variants = []
-        if emit_debug or ctx.attr.android_output_target != "release":
-            android_variants.append("debug")
-        if emit_release and ctx.attr.android_output_target == "release":
-            android_variants.append("release")
-        outputs += _compress_generated_android_srcs(ctx, module_name, outputs, android_variants)
 
     return [
         DefaultInfo(files = depset([o for o in outputs if o.path.endswith(".valdimodule")])),
@@ -959,19 +952,18 @@ def _get_files_output_paths(ctx, module_name, module_directory, localization_mod
     if enable_ios and ctx.attr.has_dependency_data:
         outputs.append(_get_dependency_data_path(module_name))
 
-    if ctx.attr.single_file_codegen:
-        if enable_android and ctx.attr.has_android_exports:
-            outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_generated_src(module_name), emit_debug, emit_release)
-        if enable_ios and ctx.attr.has_ios_exports:
-            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_src(ctx.attr.ios_module_name, ctx.attr.ios_language), emit_debug, emit_release)
-            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_api_src(ctx.attr.ios_module_name, ctx.attr.ios_language), emit_debug, emit_release)
+    if enable_android and ctx.attr.has_android_exports:
+        outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_generated_src(module_name), emit_debug, emit_release)
+    if enable_ios and ctx.attr.has_ios_exports:
+        outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_src(ctx.attr.ios_module_name, ctx.attr.ios_language), emit_debug, emit_release)
+        outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_api_src(ctx.attr.ios_module_name, ctx.attr.ios_language), emit_debug, emit_release)
 
-        # C++ is always generated (shared cross-platform infrastructure) because it outputs
-        # to the release path regardless of --output-target. Suppressed when the compiler
-        # is invoked with --output-target debug (code coverage, or output_flavor=debug),
-        # since that tells the compiler to skip the release output path entirely.
-        if emit_release:
-            outputs += _get_cpp_generated_src(module_name)
+    # C++ is always generated (shared cross-platform infrastructure) because it outputs
+    # to the release path regardless of --output-target. Suppressed when the compiler
+    # is invoked with --output-target debug (code coverage, or output_flavor=debug),
+    # since that tells the compiler to skip the release output path entirely.
+    if emit_release:
+        outputs += _get_cpp_generated_src(module_name)
 
     # Add code coverage output file
     if code_coverage:
@@ -993,22 +985,6 @@ def _get_directories_output_paths(ctx, code_coverage, enable_android = True, ena
 
     # iOS generated sources. Debug is always generated
     ios_module_name = ctx.attr.ios_module_name
-
-    if not ctx.attr.single_file_codegen:
-        # Android generated sources. Debug is always generated (only if module has Android exports)
-        if enable_android and ctx.attr.has_android_exports:
-            outputs = _append_debug_and_maybe_release(outputs, android_output_target, _get_android_generated_src_dir(), emit_debug, emit_release)
-
-        # iOS generated sources (only if module has iOS exports)
-        if enable_ios and ctx.attr.has_ios_exports:
-            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_src_dir(ios_module_name), emit_debug, emit_release)
-            outputs = _append_debug_and_maybe_release(outputs, ios_output_target, _get_ios_generated_api_src_dir(ios_module_name), emit_debug, emit_release)
-
-        # C++ is always generated (shared cross-platform infrastructure) because it outputs
-        # to the release path regardless of --output-target. Suppressed when the compiler
-        # is invoked with --output-target debug (code coverage, or output_flavor=debug).
-        if emit_release:
-            outputs.append(_get_cpp_generated_src_dir())
 
     # iOS source maps.
     # Note: sourcemap directories are not created when code coverage is enabled
@@ -1826,18 +1802,18 @@ def _create_valdi_module_info(ctx, module_name, module_yaml, module_definition, 
         ios_release_resource_files = depset(_extract_ios_unstructured_resources("release", outputs)),
         ios_debug_bundle_resources = depset(_extract_ios_resource_bundles(module_name, "debug", outputs)),
         ios_release_bundle_resources = depset(_extract_ios_resource_bundles(module_name, "release", outputs)),
-        ios_debug_generated_hdrs = _extract_ios_generated_hdrs("debug", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
+        ios_debug_generated_hdrs = _extract_ios_generated_hdrs("debug", outputs, ios_module_name, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
         ios_debug_generated_srcs = _extract_ios_generated_srcs("debug", outputs, ios_module_name, single_file_codegen, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
-        ios_release_generated_hdrs = _extract_ios_generated_hdrs("release", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios and emit_ios_release else None,
+        ios_release_generated_hdrs = _extract_ios_generated_hdrs("release", outputs, ios_module_name, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios and emit_ios_release else None,
         ios_release_generated_srcs = _extract_ios_generated_srcs("release", outputs, ios_module_name, single_file_codegen, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios and emit_ios_release else None,
-        ios_debug_api_generated_hdrs = _extract_ios_api_generated_hdrs("debug", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
+        ios_debug_api_generated_hdrs = _extract_ios_api_generated_hdrs("debug", outputs, ios_module_name, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
         ios_debug_api_generated_srcs = _extract_ios_api_generated_srcs("debug", outputs, ios_module_name, single_file_codegen, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
-        ios_release_api_generated_hdrs = _extract_ios_api_generated_hdrs("release", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios and emit_ios_release else None,
+        ios_release_api_generated_hdrs = _extract_ios_api_generated_hdrs("release", outputs, ios_module_name, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios and emit_ios_release else None,
         ios_release_api_generated_srcs = _extract_ios_api_generated_srcs("release", outputs, ios_module_name, single_file_codegen, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios and emit_ios_release else None,
-        ios_debug_generated_swift_srcs = _extract_ios_generated_swift_srcs("debug", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
-        ios_release_generated_swift_srcs = _extract_ios_generated_swift_srcs("release", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios and emit_ios_release else None,
-        ios_debug_api_generated_swift_srcs = _extract_ios_api_generated_swift_srcs("debug", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
-        ios_release_api_generated_swift_srcs = _extract_ios_api_generated_swift_srcs("release", outputs, ios_module_name, ctx.attr.ios_language) if single_file_codegen and ctx.attr.has_ios_exports and enable_ios and emit_ios_release else None,
+        ios_debug_generated_swift_srcs = _extract_ios_generated_swift_srcs("debug", outputs, ios_module_name, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
+        ios_release_generated_swift_srcs = _extract_ios_generated_swift_srcs("release", outputs, ios_module_name, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios and emit_ios_release else None,
+        ios_debug_api_generated_swift_srcs = _extract_ios_api_generated_swift_srcs("debug", outputs, ios_module_name, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
+        ios_release_api_generated_swift_srcs = _extract_ios_api_generated_swift_srcs("release", outputs, ios_module_name, ctx.attr.ios_language) if ctx.attr.has_ios_exports and enable_ios and emit_ios_release else None,
         ios_debug_nativesrc = _extract_ios_native_srcs("debug", ios_module_name, module_name, outputs) if ctx.attr.has_ios_exports and enable_ios and emit_ios_debug else None,
         ios_release_nativesrc = _extract_ios_native_srcs("release", ios_module_name, module_name, outputs) if is_ios_release and ctx.attr.has_ios_exports and enable_ios else None,
         ios_debug_sourcemaps = _extract_ios_debug_sourcemaps(module_name, outputs) if has_valdimodule and not code_coverage and enable_ios and emit_ios_debug else None,
@@ -1946,10 +1922,7 @@ def _extract_valdi_module(file_path, outputs):
     return found[0]
 
 def _extract_android_srcjar(output_target, module_name, single_file_codegen, outputs):
-    if single_file_codegen:
-        file_path = "{}.kt".format(module_name)
-    else:
-        file_path = "{}.{}.srcjar".format(module_name, output_target)
+    file_path = "{}.kt".format(module_name)
     found = [f for f in outputs if f.path.endswith(file_path)]
 
     if not found:
@@ -2051,21 +2024,11 @@ def _extract_ios_api_generated_hdrs(output_target, outputs, ios_module_name, ios
     return _filter_ios_src(outputs, output_target, debug_src, release_src, ".h")
 
 def _extract_ios_generated_srcs(output_target, outputs, ios_module_name, single_file_codegen, ios_language = ["objc"]):
-    if single_file_codegen:
-        if "objc" not in ios_language:
-            return None
-        debug_src, release_src = _get_ios_generated_src(ios_module_name, ios_language)
+    if "objc" not in ios_language:
+        return None
+    debug_src, release_src = _get_ios_generated_src(ios_module_name, ios_language)
 
-        return _filter_ios_src(outputs, output_target, debug_src, release_src, ".m")
-    else:
-        debug_src_dir, release_src_dir = _get_ios_generated_src_dir(ios_module_name)
-
-        if output_target == "debug":
-            found = [f for f in outputs if f.is_directory and f.path.endswith(debug_src_dir)]
-        else:
-            found = [f for f in outputs if f.is_directory and f.path.endswith(release_src_dir)]
-
-        return found[0] if found else None
+    return _filter_ios_src(outputs, output_target, debug_src, release_src, ".m")
 
 def _extract_ios_generated_swift_srcs(output_target, outputs, ios_module_name, ios_language = ["objc"]):
     if "swift" not in ios_language:
@@ -2074,20 +2037,11 @@ def _extract_ios_generated_swift_srcs(output_target, outputs, ios_module_name, i
     return _filter_ios_src(outputs, output_target, debug_src, release_src, ".swift")
 
 def _extract_ios_api_generated_srcs(output_target, outputs, ios_module_name, single_file_codegen, ios_language = ["objc"]):
-    if single_file_codegen:
-        if "objc" not in ios_language:
-            return None
-        debug_api_src, release_api_src = _get_ios_generated_api_src(ios_module_name, ios_language)
+    if "objc" not in ios_language:
+        return None
+    debug_api_src, release_api_src = _get_ios_generated_api_src(ios_module_name, ios_language)
 
-        return _filter_ios_src(outputs, output_target, debug_api_src, release_api_src, ".m")
-    else:
-        debug_api_src_dir, release_api_src_dir = _get_ios_generated_api_src_dir(ios_module_name)
-
-        if output_target == "debug":
-            found = [f for f in outputs if f.is_directory and f.path.endswith(debug_api_src_dir)]
-        else:
-            found = [f for f in outputs if f.is_directory and f.path.endswith(release_api_src_dir)]
-        return found[0] if found else None
+    return _filter_ios_src(outputs, output_target, debug_api_src, release_api_src, ".m")
 
 def _extract_ios_api_generated_swift_srcs(output_target, outputs, ios_module_name, ios_language = ["objc"]):
     if "swift" not in ios_language:
@@ -2100,43 +2054,24 @@ def _extract_cpp_generated_srcs(outputs, module_name, single_file_codegen):
 
     C++ codegen always outputs to release configuration.
     """
-    if single_file_codegen:
-        srcs = _get_cpp_generated_src(module_name)
-
-        # Filter for .cpp files
-        src_to_check = [f for f in srcs if f.endswith(".cpp")]
-
-        if len(src_to_check) != 1:
-            fail("Expecting to find exactly 1 .cpp file. Found {}".format(srcs))
-
-        found = [output for output in outputs if output.path.endswith(src_to_check[0])]
-        return found[0] if found else None
-    else:
-        src_dir = _get_cpp_generated_src_dir()
-        found = [f for f in outputs if f.is_directory and f.path.endswith(src_dir)]
-        return found[0] if found else None
+    srcs = _get_cpp_generated_src(module_name)
+    src_to_check = [f for f in srcs if f.endswith(".cpp")]
+    if len(src_to_check) != 1:
+        fail("Expecting to find exactly 1 .cpp file. Found {}".format(srcs))
+    found = [output for output in outputs if output.path.endswith(src_to_check[0])]
+    return found[0] if found else None
 
 def _extract_cpp_generated_hdrs(outputs, module_name, single_file_codegen):
     """Extract C++ generated header files (.hpp) from outputs.
 
     C++ codegen always outputs to release configuration.
     """
-    if single_file_codegen:
-        srcs = _get_cpp_generated_src(module_name)
-
-        # Filter for .hpp files
-        src_to_check = [f for f in srcs if f.endswith(".hpp")]
-
-        if len(src_to_check) != 1:
-            fail("Expecting to find exactly 1 .hpp file. Found {}".format(srcs))
-
-        found = [output for output in outputs if output.path.endswith(src_to_check[0])]
-        return found[0] if found else None
-    else:
-        # For multi-file codegen, headers are in the same directory as sources
-        src_dir = _get_cpp_generated_src_dir()
-        found = [f for f in outputs if f.is_directory and f.path.endswith(src_dir)]
-        return found[0] if found else None
+    srcs = _get_cpp_generated_src(module_name)
+    src_to_check = [f for f in srcs if f.endswith(".hpp")]
+    if len(src_to_check) != 1:
+        fail("Expecting to find exactly 1 .hpp file. Found {}".format(srcs))
+    found = [output for output in outputs if output.path.endswith(src_to_check[0])]
+    return found[0] if found else None
 
 def _extract_android_debug_sourcemaps(module_name, outputs):
     """ Extract android debug sourcemap(map.json) files from the list of source files. """
