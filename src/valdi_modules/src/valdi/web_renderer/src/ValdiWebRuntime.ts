@@ -157,9 +157,25 @@ class Runtime {
     // console.log("postMessage", contextId, command, params);
   }
 
-  // Image context moved from hardcoded require.context to __valdiImageContext,
-  // set by playground setup.ts. Decouples image bundling from ValdiWebRuntime.
+  // Whole-catalog access — used by `loadCatalog(catalogPath)` callers that
+  // need every asset in a module's res/. Per-component access flows
+  // through __valdiResolveImage (compiler-injected static requires) and
+  // bypasses this code path entirely.
+  //
+  // Resolution tiers (first hit wins):
+  //   1. __valdiImageRegistry[catalogPath] — build-time map emitted by
+  //      collapse_web_paths, populated when consumers `require` the
+  //      module's _image_registry.js.
+  //   2. __valdiImageContext — back-compat path for consumers that wire
+  //      a webpack require.context directly (pre-PR4 behavior).
   getAssets(catalogPath: string) {
+    const registry = (globalThis as any).__valdiImageRegistry?.[catalogPath];
+    if (registry) {
+      return Object.entries(registry).map(([k, v]: [string, any]) => ({
+        path: k,
+        src: v?.default ?? v,
+      }));
+    }
     const imgCtx = (globalThis as any).__valdiImageContext;
     if (!imgCtx) {
       return [];

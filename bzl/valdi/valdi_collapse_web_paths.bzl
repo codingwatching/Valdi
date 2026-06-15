@@ -671,7 +671,48 @@ if [ -d "$OUT/src" ]; then
   } > "$WORKER_REGISTRY"
 fi
 
-# ── Step 4d: Rewrite internal requires to relative paths ──
+# ── Step 4d: Generate image registry ──
+# Per-module map of camelCase keys -> static image requires. Populates
+# globalThis.__valdiImageRegistry[<module>], read by
+# ValdiWebRuntime.getAssets(). Replaces the runtime require.context that
+# previously scanned every image in the package on each catalog lookup.
+# Bundles every image in each module's res/ — no tree-shaking, matches
+# the existing require.context behavior (which already pulled all images).
+if [ -d "$OUT/src" ]; then
+  IMG_REGISTRY="$OUT/src/_image_registry.js"
+  {
+    echo "var __r = (globalThis.__valdiImageRegistry = globalThis.__valdiImageRegistry || {});"
+    for MOD_DIR in "$OUT/src"/*/; do
+      [ -d "$MOD_DIR/res" ] || continue
+      MOD=$(basename "$MOD_DIR")
+      IMG_FILES=$(for EXT in png jpg jpeg svg webp gif; do find "$MOD_DIR/res" -maxdepth 1 -type f -name "*.$EXT" 2>/dev/null; done | sort)
+      [ -z "$IMG_FILES" ] && continue
+      ENTRIES=""
+      for F in $IMG_FILES; do
+        BASENAME=$(basename "$F")
+        STEM="${BASENAME%.*}"
+        # Skip scale variants (@2x/@3x and Android density suffixes) —
+        # the base asset key represents them at the runtime layer.
+        case "$STEM" in
+          *@*x|*_xxxhdpi|*_xxhdpi|*_xhdpi|*_hdpi|*_mdpi|*_ldpi) continue ;;
+        esac
+        # camelCase the stem; split on both '-' and '_' so kebab-case
+        # (icon-tick.svg) and snake_case (music_icon.svg) both map.
+        CAMEL=$(printf '%s' "$STEM" | awk -F'[-_]' '{ printf("%s", $1); for(i=2;i<=NF;i++) if($i!="") printf("%s%s", toupper(substr($i,1,1)), substr($i,2)) }')
+        [ -z "$CAMEL" ] && continue
+        ENTRIES="${ENTRIES}  '${CAMEL}': require('./${MOD}/res/${BASENAME}'),
+"
+      done
+      if [ -n "$ENTRIES" ]; then
+        echo "__r['${MOD}'] = {"
+        printf '%s' "$ENTRIES"
+        echo "};"
+      fi
+    done
+  } > "$IMG_REGISTRY"
+fi
+
+# ── Step 4e: Rewrite internal requires to relative paths ──
 # Bare module requires (e.g. require('valdi_core/src/JSX')) become
 # relative (e.g. require('../../valdi_core/src/JSX.js')). Also rewrites
 # bare native names (e.g. require('Graphene') -> relative path to shim).
