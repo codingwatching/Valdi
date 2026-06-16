@@ -1,5 +1,3 @@
-import { ComponentConstructor, IComponent } from 'valdi_core/src/IComponent';
-import { ComponentPrototype } from 'valdi_core/src/ComponentPrototype';
 import { Renderer } from 'valdi_core/src/Renderer';
 import { UpdateAttributeDelegate, ValdiWebRendererDelegate } from './ValdiWebRendererDelegate';
 
@@ -23,14 +21,5 @@ export class ValdiWebRenderer extends Renderer implements UpdateAttributeDelegat
 
   destroy() {
     this.delegate.onDestroyed();
-  }
-
-  renderRootComponent<T extends IComponent<ViewModel, Context>, ViewModel = any, Context = any>(
-    ctr: ComponentConstructor<T>,
-    prototype: ComponentPrototype,
-    viewModel: ViewModel,
-    context: Context,
-  ): void {
-    super.renderRootComponent(ctr, prototype, viewModel, context);
   }
 }

@@ -26,6 +26,11 @@ final class ValdiCompiler {
     private let bundleManager: BundleManager
     private var currentSequence = 0
 
+    /// Number of items that failed in the most recent `compile()` call.
+    /// Lets callers detect per-pass compile errors (e.g. TS / asset processing) which
+    /// `compile()` logs to the diagnostic stream but does not throw on.
+    private(set) var lastCompileFailedItemCount: Int = 0
+
     init(logger: ILogger, pipeline: CompilationPipeline, projectConfig: ValdiProjectConfig, bundleManager: BundleManager) {
         self.logger = logger
         self.pipeline = pipeline
@@ -79,6 +84,7 @@ final class ValdiCompiler {
         newFiles.removeAll()
 
         let result = try pipeline.process(items: CompilationItems(compileSequence: compileSequence, items: allFiles))
+        self.lastCompileFailedItemCount = result.failedItems.count
 
         if !result.warnings.isEmpty {
             logger.error("Warnings reported:")

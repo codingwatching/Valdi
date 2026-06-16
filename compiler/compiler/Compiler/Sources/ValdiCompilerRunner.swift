@@ -258,6 +258,15 @@ class ValdiCompilerRunner {
                 }
                 logger.info("Hot reloading disabled - starting compilation")
                 try compiler.compile()
+
+                // --fail-on-errors: surface per-item TS / asset failures as a
+                // non-zero process exit. compile() doesn't throw on those — it
+                // logs them and tracks the count in lastCompileFailedItemCount.
+                // Gated behind the flag so existing --compile callers that today
+                // tolerate per-item errors keep working unchanged.
+                if self.arguments.failOnErrors && compiler.lastCompileFailedItemCount > 0 {
+                    return false
+                }
             }
 
             if arguments.bazel && logger.emittedLogsCount > 0 {

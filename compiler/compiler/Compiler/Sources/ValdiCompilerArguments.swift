@@ -15,6 +15,9 @@ struct ValdiCompilerArguments: ParsableCommand {
     @Flag(help: "enter watch mode with active hot reloader")
     var monitor = false
 
+    @Flag(help: "In --compile mode, return a non-zero exit code if the compile pass surfaced any per-item errors (TS, asset processing, etc.). Without this flag, --compile logs per-item errors but exits 0. Intended for CI.")
+    var failOnErrors = false
+
     @Flag(help: "Generate static resources file from a list of input files")
     var genStaticRes = false
 
@@ -242,6 +245,10 @@ struct ValdiCompilerArguments: ParsableCommand {
         let requiresOutput = [!self.buildModule.isEmpty, !self.unpackModule.isEmpty, !self.textconvModule.isEmpty, !self.uploadModule.isEmpty, self.dumpModulesInfo, self.genStaticRes].filter{$0}.count > 0
         if requiresOutput && self.out == nil {
             throw ValidationError("Must provide --out")
+        }
+
+        if self.failOnErrors && !self.compile {
+            throw ValidationError("--fail-on-errors requires --compile")
         }
         
         if !self.uploadModule.isEmpty && self.uploadBaseUrl == nil {
