@@ -673,7 +673,8 @@ fi
 
 # ── Step 4d: Generate image registry ──
 # Per-module map of camelCase keys -> static image requires. Populates
-# globalThis.__valdiImageRegistry[<module>], read by
+# globalThis.__valdiImageRegistry['<module>/res'] (matches the catalogPath
+# passed by AssetCatalog.loadCatalog from each generated res.js), read by
 # ValdiWebRuntime.getAssets(). Replaces the runtime require.context that
 # previously scanned every image in the package on each catalog lookup.
 # Bundles every image in each module's res/ — no tree-shaking, matches
@@ -704,7 +705,7 @@ if [ -d "$OUT/src" ]; then
 "
       done
       if [ -n "$ENTRIES" ]; then
-        echo "__r['${MOD}'] = {"
+        echo "__r['${MOD}/res'] = {"
         printf '%s' "$ENTRIES"
         echo "};"
       fi
