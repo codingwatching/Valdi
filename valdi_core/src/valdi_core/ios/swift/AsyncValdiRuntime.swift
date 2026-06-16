@@ -3,15 +3,14 @@ import valdi_core
 
 public class AsyncValdiRuntimeProvider: NSObject, AsyncValdiRuntimeProviding, SCAsyncValdiRuntimeProviding {
 
-    private let runtimeLazy: ValdiLazy<SCValdiRuntimeProtocol>
+    private let factory: @Sendable () async -> SCValdiRuntimeProtocol
 
-    public init(runtimeLazy: ValdiLazy<SCValdiRuntimeProtocol>) {
-        self.runtimeLazy = runtimeLazy
+    @ValdiActor private var cachedRuntime: SCValdiRuntimeProtocol?
+    @ValdiActor private var initializationTask: Task<SCValdiRuntimeProtocol, Never>?
+
+    public init(factory: @escaping @Sendable () async -> SCValdiRuntimeProtocol) {
+        self.factory = factory
         super.init()
-    }
-
-    public convenience init(factory: @escaping @Sendable () -> SCValdiRuntimeProtocol) {
-        self.init(runtimeLazy: ValdiLazy(initializer: factory))
     }
 
     // MARK: - ObjC Bridge
@@ -19,14 +18,14 @@ public class AsyncValdiRuntimeProvider: NSObject, AsyncValdiRuntimeProviding, SC
     @objc(getRuntime:)
     public func getRuntime(completion: @escaping (SCValdiRuntimeProtocol) -> Void) {
         Task { @ValdiActor in
-            completion(runtimeLazy.value)
+            completion(await self.runtime)
         }
     }
 
     @objc(getJSRuntime:)
     public func getJSRuntime(completion: @escaping (SCValdiJSRuntime?) -> Void) {
         Task { @ValdiActor in
-            let runtime = runtimeLazy.value
+            let runtime = await self.runtime
             runtime.getJSRuntime { jsRuntime in
                 completion(jsRuntime)
             }
@@ -36,10 +35,32 @@ public class AsyncValdiRuntimeProvider: NSObject, AsyncValdiRuntimeProviding, SC
     // MARK: - Swift Async API
 
     @ValdiActor public var runtime: SCValdiRuntimeProtocol {
-        runtimeLazy.value
+        get async {
+            if let cachedRuntime {
+                return cachedRuntime
+            }
+
+            if let initializationTask {
+                return await initializationTask.value
+            }
+
+            let factory = self.factory
+            let initializationTask = Task {
+                await factory()
+            }
+            self.initializationTask = initializationTask
+
+            let runtime = await initializationTask.value
+            self.cachedRuntime = runtime
+            self.initializationTask = nil
+            return runtime
+        }
     }
 
     @ValdiActor public var jsRuntime: SCValdiJSRuntime? {
-        runtimeLazy.value.jsRuntime()
+        get async {
+            let runtime = await self.runtime
+            return await runtime.jsRuntime()
+        }
     }
 }
