@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "valdi/runtime/Context/RawViewNodeId.hpp"
 #include "valdi/runtime/Views/Frame.hpp"
 #include "valdi_core/cpp/Utils/ValueFunction.hpp"
 
@@ -107,12 +108,25 @@ public:
     void setMaintainScrollAnchor(bool maintain);
     bool getMaintainScrollAnchor() const;
 
-    // Preserve scroll position: when enabled, content size growth is matched by an equal
-    // shift in contentOffset.y so the visible content stays put. Intended for live-update
-    // scenarios where the user is scrolled away from the newest end and shouldn't be
-    // bumped when new content lands at the array end.
+    // Preserve scroll position: when enabled, updateScrollState anchors the first on-screen
+    // child and shifts contentOffset.y by exactly the content-height change that occurred
+    // ABOVE it, so on-screen content stays in place. Unlike the net content-size delta this
+    // replaced, it stays correct when content is added at one end and trimmed at the other in
+    // the same pass (windowed message lists). Intended for live-update scenarios where the user
+    // is scrolled away from the newest end and shouldn't be bumped when new content lands.
     void setPreserveScrollPosition(bool preserve);
     bool getPreserveScrollPosition() const;
+
+    // Anchor memory for preserveScrollPosition: the id of the first on-screen child and its
+    // screen position (= absolute Y minus content offset) at record time. The anchor is refreshed
+    // on every scroll event and layout pass (so it never goes stale), and updateScrollState pins
+    // it back to this screen position when the viewport is stationary -- which survives the offset
+    // being clamped or scrolled between record and apply.
+    bool hasPreserveAnchor() const;
+    RawViewNodeId getPreserveAnchorId() const;
+    float getPreserveAnchorScreenPos() const;
+    void setPreserveAnchor(RawViewNodeId id, float screenPos);
+    void clearPreserveAnchor();
 
 private:
     Point _directionAgnosticContentOffset;
@@ -136,6 +150,9 @@ private:
     bool _isHorizontal = false;
     bool _maintainScrollAnchor = false;
     bool _preserveScrollPosition = false;
+    bool _hasPreserveAnchor = false;
+    RawViewNodeId _preserveAnchorId = 0;
+    float _preserveAnchorScreenPos = 0.0f;
 
     Ref<ValueFunction> _onScrollCallback;
     Ref<ValueFunction> _onScrollEndCallback;

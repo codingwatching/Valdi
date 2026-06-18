@@ -225,9 +225,6 @@ ViewNodeScrollStateUpdateContentSizeResult ViewNodeScrollState::updateContentSiz
         auto newOverscrollY = calculateOverscroll(
             contentSizeWithStaticSize.height, viewportSize.height, _directionAgnosticContentOffset.y);
 
-        // Capture growth before _contentSize is overwritten so preserveScrollPosition can use it.
-        float growthDeltaY = contentSizeWithStaticSize.height - _contentSize.height;
-
         _contentSize = contentSizeWithStaticSize;
         result.changed = true;
         shouldNotifyContentSizeChangeCallback = true;
@@ -243,15 +240,6 @@ ViewNodeScrollStateUpdateContentSizeResult ViewNodeScrollState::updateContentSiz
             _directionAgnosticContentOffset.y += offsetY;
             _directionAgnosticUnclampedContentOffset.x += offsetX;
             _directionAgnosticUnclampedContentOffset.y += offsetY;
-        }
-
-        // Preserve scroll position: when content grows, shift offset by the same amount
-        // so the visible content stays put. Caller (e.g. inverted message list scroll
-        // handler) toggles this on while the user is scrolled away from the newest end.
-        if (_preserveScrollPosition && growthDeltaY > 0.0f) {
-            _directionAgnosticContentOffset.y += growthDeltaY;
-            _directionAgnosticUnclampedContentOffset.y += growthDeltaY;
-            result.contentOffsetAdjusted = true;
         }
     }
 
@@ -478,10 +466,39 @@ bool ViewNodeScrollState::getMaintainScrollAnchor() const {
 
 void ViewNodeScrollState::setPreserveScrollPosition(bool preserve) {
     _preserveScrollPosition = preserve;
+    if (!preserve) {
+        // Drop the remembered anchor so re-enabling starts fresh against the current layout
+        // instead of cancelling movement relative to a stale position.
+        clearPreserveAnchor();
+    }
 }
 
 bool ViewNodeScrollState::getPreserveScrollPosition() const {
     return _preserveScrollPosition;
+}
+
+bool ViewNodeScrollState::hasPreserveAnchor() const {
+    return _hasPreserveAnchor;
+}
+
+RawViewNodeId ViewNodeScrollState::getPreserveAnchorId() const {
+    return _preserveAnchorId;
+}
+
+float ViewNodeScrollState::getPreserveAnchorScreenPos() const {
+    return _preserveAnchorScreenPos;
+}
+
+void ViewNodeScrollState::setPreserveAnchor(RawViewNodeId id, float screenPos) {
+    _hasPreserveAnchor = true;
+    _preserveAnchorId = id;
+    _preserveAnchorScreenPos = screenPos;
+}
+
+void ViewNodeScrollState::clearPreserveAnchor() {
+    _hasPreserveAnchor = false;
+    _preserveAnchorId = 0;
+    _preserveAnchorScreenPos = 0.0f;
 }
 
 } // namespace Valdi

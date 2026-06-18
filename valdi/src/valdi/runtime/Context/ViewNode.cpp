@@ -877,6 +877,106 @@ Point ViewNode::getDirectionAgnosticScrollContentOffset() const {
     return _scrollState->getDirectionAgnosticContentOffset();
 }
 
+namespace {
+
+// Max depth to descend/search the scroll subtree when (re)finding the preserve anchor.
+constexpr int kPreserveAnchorMaxDepth = 12;
+
+// Absolute Y of `node` relative to `scrollNode` (sum of Yoga tops up the parent chain).
+float preserveAnchorAbsoluteTop(ViewNode* scrollNode, ViewNode* node) {
+    // A node may have no Yoga node (e.g. not-yet-laid-out lazy rows); treat its offset as 0.
+    float y = node->getYogaNode() ? sanitizeYogaValue(YGNodeLayoutGetTop(node->getYogaNode())) : 0.0f;
+    for (auto* parent = node->getParent().get(); parent != nullptr && parent != scrollNode;
+         parent = parent->getParent().get()) {
+        if (parent->getYogaNode()) {
+            y += sanitizeYogaValue(YGNodeLayoutGetTop(parent->getYogaNode()));
+        }
+    }
+    return y;
+}
+
+// Descend to the deepest node that straddles `probeY` (a content-space Y). Callers probe the
+// viewport CENTER, not its leading edge: the center is always real message content, whereas the
+// leading edge at the newest/oldest end sits on chrome (top padding, loading spinners, whitespace)
+// pinned to the content edge, which doesn't move when messages are inserted -- a useless anchor.
+// We pick by position (inverted lists are column-reverse) and descend to a leaf-sized node.
+ViewNode* preserveDescendantAtY(ViewNode* scrollNode, float probeY) {
+    ViewNode* anchor = nullptr;
+    ViewNode* node = scrollNode;
+    // Carry the running absolute top of `node` down the descent so a child's absolute top is just
+    // nodeTop + its own Yoga top -- no per-child walk back up to scrollNode (this runs per scroll
+    // frame). scrollNode is the origin, so its children's tops are relative to it (nodeTop = 0).
+    float nodeTop = 0.0f;
+    for (int depth = 0; depth < kPreserveAnchorMaxDepth; depth++) {
+        ViewNode* next = nullptr;
+        float nextTop = 0.0f;
+        float nearestBelowTop = 0.0f;
+        bool haveNearestBelow = false;
+        for (auto* child : *node) {
+            // Skip children without a layout node -- no position/size to anchor on.
+            if (!child->getYogaNode()) {
+                continue;
+            }
+            float top = nodeTop + sanitizeYogaValue(YGNodeLayoutGetTop(child->getYogaNode()));
+            float height = sanitizeYogaValue(YGNodeLayoutGetHeight(child->getYogaNode()));
+            if (probeY >= top && probeY < top + height) {
+                next = child;
+                nextTop = top;
+                break;
+            }
+            if (top >= probeY && (!haveNearestBelow || top < nearestBelowTop)) {
+                next = child;
+                nextTop = top;
+                nearestBelowTop = top;
+                haveNearestBelow = true;
+            }
+        }
+        if (!next)
+            break;
+        // Track the deepest node that has a trackable (non-zero) rawId. If the deepest node is
+        // id-less we fall back to this ancestor rather than returning an unanchorable node, which
+        // would clear the anchor and let the next reflow jump.
+        if (next->getRawId() != 0) {
+            anchor = next;
+        }
+        node = next;
+        nodeTop = nextTop;
+    }
+    return anchor;
+}
+
+ViewNode* preserveFindDescendantById(ViewNode* node, RawViewNodeId id, int depth) {
+    // id 0 is the unset/default rawId (e.g. synthetic placeholder nodes); never "match" it, or
+    // we would anchor to the first id-less node (content top) and jump the viewport.
+    if (depth <= 0 || id == 0)
+        return nullptr;
+    for (auto* child : *node) {
+        if (child->getRawId() == id)
+            return child;
+        auto* found = preserveFindDescendantById(child, id, depth - 1);
+        if (found)
+            return found;
+    }
+    return nullptr;
+}
+
+// Re-pick the anchor (the node at the viewport center) and remember its id + screen position
+// (absolute top relative to the viewport top) so a later content reflow can pin it back. Called
+// from both layout (updateScrollState) and scroll (handleOnScroll) so the anchor never goes stale
+// between layout passes.
+void refreshPreserveAnchor(ViewNode* scrollNode, ViewNodeScrollState& scrollState, float offsetY, float viewportH) {
+    float probeY = offsetY + viewportH * 0.5f;
+    // Only anchor on a node with a real, trackable rawId. id 0 (unset/default) can't be re-found
+    // across passes, so don't record it -- clear instead and re-pick next pass.
+    if (auto* anchor = preserveDescendantAtY(scrollNode, probeY); anchor != nullptr && anchor->getRawId() != 0) {
+        scrollState.setPreserveAnchor(anchor->getRawId(), preserveAnchorAbsoluteTop(scrollNode, anchor) - offsetY);
+    } else {
+        scrollState.clearPreserveAnchor();
+    }
+}
+
+} // namespace
+
 void ViewNode::handleOnScroll(const Point& directionDependentContentOffset,
                               const Point& directionDependentUnclampedContentOffset,
                               const Point& directionDependentVelocity) {
@@ -900,6 +1000,14 @@ void ViewNode::handleOnScroll(const Point& directionDependentContentOffset,
 
         scrollState.notifyOnScroll(
             directionAgnosticContentOffset, directionAgnosticUnclampedContentOffset, directionDependentVelocity);
+
+        // Keep the preserveScrollPosition anchor in sync with the live scroll position. Layout
+        // passes (updateScrollState) only run on relayout, but the offset also moves on scroll and
+        // clamp; refreshing here means a later content reflow pins the node the user is actually
+        // looking at, not a stale one captured at an old offset.
+        if (scrollState.getPreserveScrollPosition()) {
+            refreshPreserveAnchor(this, scrollState, directionAgnosticContentOffset.y, _calculatedFrame.height);
+        }
 
         setCalculatedViewportNeedsUpdate();
     });
@@ -2422,6 +2530,49 @@ void ViewNode::updateScrollState() {
         }
     }
 
+    // Preserve scroll position: keep on-screen content fixed by anchoring the first on-screen
+    // child and pinning it back to its recorded screen position after a content reflow. The anchor
+    // is refreshed on every scroll event (handleOnScroll) and layout pass, so it tracks the live
+    // viewport and never goes stale. We only *apply* the pin when the viewport is stationary (not
+    // being driven by an active drag or fling), so we don't fight the user's scroll. This replaces
+    // a net content-size delta, which was wrong whenever content was added at one end and trimmed
+    // at the other in the same pass. (maintainScrollAnchor above is a separate path used by in-game
+    // chat; PG drives this one instead.)
+    if (scrollState.getPreserveScrollPosition()) {
+        float viewportH = _calculatedFrame.height;
+        float maxScroll = std::max(highestHeight - viewportH, 0.0f);
+        float offsetY = scrollState.getDirectionAgnosticContentOffset().y;
+        bool stationary = !scrollState.isScrolling() && !scrollState.isCurrentlyAnimating();
+
+        // 1) Pin the anchor recorded last (its screen position is where the user is looking). Only
+        //    while stationary -- mid-scroll the native view owns the offset. We target
+        //    newAbsoluteTop - screenPos rather than offset + delta, so a clamp or scroll between
+        //    record and now can't double-count.
+        if (scrollState.hasPreserveAnchor() && stationary) {
+            auto* anchorNode =
+                preserveFindDescendantById(this, scrollState.getPreserveAnchorId(), kPreserveAnchorMaxDepth);
+            // Only pin if the anchor is still laid out. A recycled/un-laid-out row keeps its rawId
+            // but has no Yoga node, so preserveAnchorAbsoluteTop would read 0 and slam the viewport
+            // to the content top. Skip and let step 2 re-pick a valid anchor.
+            if (anchorNode != nullptr && anchorNode->getYogaNode() != nullptr) {
+                float newTop = preserveAnchorAbsoluteTop(this, anchorNode);
+                float targetY = std::max(0.0f, std::min(newTop - scrollState.getPreserveAnchorScreenPos(), maxScroll));
+                float delta = targetY - offsetY;
+                if (std::abs(delta) > 0.5f) {
+                    auto offset = scrollState.getDirectionAgnosticContentOffset();
+                    offset.y = targetY;
+                    scrollState.updateDirectionAgnosticContentOffset(offset, offset);
+                    offsetY = targetY;
+                    updateResult.changed = true;
+                    scrollState.setNeedsSyncWithView(true);
+                }
+            }
+        }
+
+        // 2) Refresh the anchor to the node at the current viewport center.
+        refreshPreserveAnchor(this, scrollState, offsetY, viewportH);
+    }
+
     if (updateResult.changed) {
         setCalculatedViewportNeedsUpdate();
 
@@ -3098,6 +3249,14 @@ void ViewNode::setMaintainScrollAnchor(bool maintain) {
 void ViewNode::setPreserveScrollPosition(bool preserve) {
     auto& scrollState = getOrCreateScrollState();
     scrollState.setPreserveScrollPosition(preserve);
+    // Capture the anchor immediately on enable, from the current (still valid, pre-insertion)
+    // layout. Otherwise the anchor stays empty until the next scroll/layout pass; if that pass is
+    // a content insertion (live message / forward page), Step 1 in updateScrollState would be
+    // skipped (no anchor) and the viewport would jump before the anchor is first recorded.
+    if (preserve && _calculatedFrame.height > 0.0f) {
+        refreshPreserveAnchor(
+            this, scrollState, scrollState.getDirectionAgnosticContentOffset().y, _calculatedFrame.height);
+    }
 }
 
 template<typename F>
