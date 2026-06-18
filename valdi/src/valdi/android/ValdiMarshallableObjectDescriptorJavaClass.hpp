@@ -16,6 +16,9 @@ namespace ValdiAndroid {
 struct ValdiMarshallableObjectDescriptorJavaClass {
     JavaClass cls;
     AnyJavaMethod getDescriptorForClassMethod;
+    // Batched fetch: returns the requested class + its transitive reference closure packed into one
+    // direct java.nio.ByteBuffer (see ValdiMarshallableObjectDescriptor.getDescriptorClosure).
+    AnyJavaMethod getDescriptorClosureMethod;
     AnyJavaMethod objectImplementsMethodMethod;
     AnyJavaField typeField;
     AnyJavaField schemaField;

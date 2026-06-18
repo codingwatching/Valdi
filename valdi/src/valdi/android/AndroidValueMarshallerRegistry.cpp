@@ -210,6 +210,13 @@ Valdi::ValueSchema AndroidValueMarshallerRegistry::getSchemaForInterfaceProperty
     }
 }
 
+void AndroidValueMarshallerRegistry::setDescriptorClosureEnabled(bool enabled) {
+    // Guard with the same lock that getOrCreateRegisteredMarshallableClass holds when it reads the
+    // flag, so this startup write is properly synchronized with marshalling-thread reads.
+    auto lock = _schemaRegistry->lock();
+    _descriptorClosureEnabled = enabled;
+}
+
 Valdi::Ref<Valdi::PlatformObjectClassDelegate<JavaValue>> AndroidValueMarshallerRegistry::getObjectClassDelegateForName(
     const Valdi::StringBox& className) {
     auto result = getOrCreateRegisteredMarshallableClass(className);
@@ -302,12 +309,11 @@ static Valdi::Result<Valdi::Void> parsePropertyReplacements(const std::string_vi
     return Valdi::Void();
 }
 
-FieldNameMap AndroidValueMarshallerRegistry::toFieldMap(const JavaValue& propertyReplacements) {
+FieldNameMap AndroidValueMarshallerRegistry::toFieldMap(const std::string& propertyReplacements) {
     FieldNameMap out;
 
-    if (!propertyReplacements.isNull()) {
-        auto propertyReplacementsStr = toStdString(JavaEnv(), propertyReplacements.getString());
-        auto result = parsePropertyReplacements(propertyReplacementsStr, out);
+    if (!propertyReplacements.empty()) {
+        auto result = parsePropertyReplacements(propertyReplacements, out);
         SC_ASSERT(result, result.description());
     }
 
@@ -319,8 +325,8 @@ Valdi::Result<JavaClassDelegate*> AndroidValueMarshallerRegistry::registerObject
     const JavaClass& javaClass,
     const std::string_view& schemaSuffix,
     const FieldNameMap& fieldMap,
-    const JavaValue& typeReferences) {
-    auto registeredSchema = parseAndRegisterSchema(fmt::format("c'{}'", className), schemaSuffix, typeReferences);
+    const std::vector<std::string>& typeReferenceNames) {
+    auto registeredSchema = parseAndRegisterSchema(fmt::format("c'{}'", className), schemaSuffix, typeReferenceNames);
     if (!registeredSchema) {
         return registeredSchema.moveError();
     }
@@ -340,6 +346,9 @@ Valdi::Result<JavaClassDelegate*> AndroidValueMarshallerRegistry::registerObject
     auto registeredClass = JavaObjectClassDelegate::make(
         registeredSchema.value().identifier, javaClass.getClass(), constructor, schemaClass->getPropertiesSize());
 
+    // Disabled in production to avoid per-member trace overhead (fires once per property of every
+    // marshalled class). Uncomment for local profiling of JNI member binding.
+    // VALDI_TRACE_META("Valdi.bindClassMembers", className);
     size_t propertyIndex = 0;
     for (const auto& property : *schemaClass) {
         auto fieldName = fieldMap.getFieldName(propertyIndex, property.name, FieldNameMap::FieldType::Class);
@@ -360,14 +369,12 @@ Valdi::Result<JavaClassDelegate*> AndroidValueMarshallerRegistry::registerInterf
     const JavaClass& javaClass,
     const std::string_view& schemaSuffix,
     const FieldNameMap& fieldMap,
-    const JavaValue& proxyClass,
-    const JavaValue& typeReferences) {
-    auto registeredSchema = parseAndRegisterSchema(fmt::format("c+'{}'", className), schemaSuffix, typeReferences);
+    const JavaClass& proxyJavaClass,
+    const std::vector<std::string>& typeReferenceNames) {
+    auto registeredSchema = parseAndRegisterSchema(fmt::format("c+'{}'", className), schemaSuffix, typeReferenceNames);
     if (!registeredSchema) {
         return registeredSchema.moveError();
     }
-
-    auto proxyJavaClass = JavaClass(JavaEnv(), reinterpret_cast<jclass>(proxyClass.getObject()));
 
     const auto* schemaClass = registeredSchema.value().schema.getClass();
     SC_ASSERT(schemaClass != nullptr);
@@ -387,6 +394,9 @@ Valdi::Result<JavaClassDelegate*> AndroidValueMarshallerRegistry::registerInterf
                                                             constructor,
                                                             schemaClass->getPropertiesSize());
 
+    // Disabled in production to avoid per-member trace overhead (fires once per method of every
+    // marshalled interface). Uncomment for local profiling of JNI member binding.
+    // VALDI_TRACE_META("Valdi.bindClassMembers", className);
     size_t methodIndex = 0;
     for (const auto& property : *schemaClass) {
         const auto& propertyType = property.schema;
@@ -438,7 +448,7 @@ Valdi::Result<JavaClassDelegate*> AndroidValueMarshallerRegistry::registerEnumCl
     const std::string_view& schemaSuffix,
     const FieldNameMap& fieldMap) {
     auto registeredSchema =
-        parseAndRegisterSchema(fmt::format("e<{}>'{}'", enumType, className), schemaSuffix, JavaValue());
+        parseAndRegisterSchema(fmt::format("e<{}>'{}'", enumType, className), schemaSuffix, std::vector<std::string>{});
     if (!registeredSchema) {
         return registeredSchema.moveError();
     }
@@ -510,31 +520,23 @@ static Valdi::Result<Valdi::Void> convertTypeReferences(const std::vector<std::s
 }
 
 Valdi::Result<AndroidValueMarshallerRegistry::RegisteredSchema> AndroidValueMarshallerRegistry::parseAndRegisterSchema(
-    const std::string& prefix, const std::string_view& suffix, const JavaValue& typeReferences) {
+    const std::string& prefix, const std::string_view& suffix, const std::vector<std::string>& typeReferenceNames) {
     std::string schemaString;
 
     schemaString += prefix;
     schemaString += "{";
 
-    if (!typeReferences.isNull()) {
-        JavaObjectArray iterator(typeReferences.getObjectArray());
-
-        auto typeReferencesSize = iterator.size();
-
-        std::vector<std::string> typeReferenceNames;
-        typeReferenceNames.reserve(typeReferencesSize);
-
-        for (size_t i = 0; i < typeReferencesSize; i++) {
-            auto typeReference = iterator.getObject(i);
-
-            typeReferenceNames.emplace_back(toStdString(JavaEnv(), reinterpret_cast<jstring>(typeReference.get())));
-        }
-
+    // convertTypeReferences substitutes [N] placeholders with typeReferenceNames[N]. With no refs
+    // (e.g. enums) there are no placeholders to substitute, and the suffix may legitimately contain a
+    // '[' (e.g. a string-enum value like '[x]') that convertTypeReferences would misparse as a
+    // placeholder and fail on. Copy verbatim in that case, matching the pre-batch isNull guard.
+    if (typeReferenceNames.empty()) {
+        schemaString += suffix;
+    } else {
         auto result = convertTypeReferences(typeReferenceNames, suffix, schemaString);
         SC_ASSERT(result, result.description());
-    } else {
-        schemaString += suffix;
     }
+
     schemaString += "}";
 
     auto parsedSchema = Valdi::ValueSchema::parse(schemaString);
@@ -547,47 +549,45 @@ Valdi::Result<AndroidValueMarshallerRegistry::RegisteredSchema> AndroidValueMars
     return AndroidValueMarshallerRegistry::RegisteredSchema(identifier, parsedSchema.value());
 }
 
-Valdi::Result<JavaClassDelegate*> AndroidValueMarshallerRegistry::getOrCreateRegisteredMarshallableClass(
-    const Valdi::StringBox& className) {
-    auto lock = _schemaRegistry->lock();
-    const auto& it = _registeredClassByName.find(className);
-    if (it != _registeredClassByName.end()) {
-        return dynamic_cast<JavaClassDelegate*>(it->second.get());
+namespace {
+
+constexpr int kTypeClass = 1;
+constexpr int kTypeInterface = 2;
+constexpr int kTypeStringEnum = 3;
+constexpr int kTypeIntEnum = 4;
+constexpr int kTypeUntyped = 5;
+constexpr uint8_t kDescriptorClosureFormatVersion = 2;
+
+std::vector<std::string> javaStringArrayToVector(const JavaValue& array) {
+    std::vector<std::string> out;
+    if (!array.isNull()) {
+        JavaObjectArray iterator(array.getObjectArray());
+        auto size = iterator.size();
+        out.reserve(size);
+        for (size_t i = 0; i < size; i++) {
+            auto element = iterator.getObject(i);
+            out.emplace_back(toStdString(JavaEnv(), reinterpret_cast<jstring>(element.get())));
+        }
     }
+    return out;
+}
 
-    VALDI_TRACE_META("Valdi.createMarshallableClass", className);
+} // namespace
 
-    auto jvmClassName = className.replacing('.', '/');
-
-    auto javaClass = JavaClass::resolveOrAbort(JavaEnv(), jvmClassName.getCStr());
-
-    const auto& objectDescriptorJavaClass = ValdiMarshallableObjectDescriptorJavaClass::get();
-
-    std::initializer_list<JavaValue> parameters = {JavaValue::unsafeMakeObject(javaClass.getClass())};
-
-    auto objectDescriptor = objectDescriptorJavaClass.getDescriptorForClassMethod.call(
-        reinterpret_cast<jobject>(objectDescriptorJavaClass.cls.getClass()), parameters.size(), parameters.begin());
-
-    auto type = objectDescriptorJavaClass.typeField.getFieldValue(objectDescriptor.getObject()).getInt();
-    auto schemaSuffix = toStdString(
-        JavaEnv(), objectDescriptorJavaClass.schemaField.getFieldValue(objectDescriptor.getObject()).getString());
-    auto proxyClass = objectDescriptorJavaClass.proxyClassField.getFieldValue(objectDescriptor.getObject());
-    auto typeReferences = objectDescriptorJavaClass.typeReferencesField.getFieldValue(objectDescriptor.getObject());
-    auto propertyReplacements =
-        objectDescriptorJavaClass.propertyReplacementsField.getFieldValue(objectDescriptor.getObject());
-
-    auto fieldMap = toFieldMap(propertyReplacements);
-
-    static constexpr int kTypeClass = 1;
-    static constexpr int kTypeInterface = 2;
-    static constexpr int kTypeStringEnum = 3;
-    static constexpr int kTypeIntEnum = 4;
-    static constexpr int kTypeUntyped = 5;
-
+Valdi::Result<JavaClassDelegate*> AndroidValueMarshallerRegistry::registerParsedDescriptor(
+    const Valdi::StringBox& className,
+    const JavaClass& javaClass,
+    int type,
+    const std::string_view& schemaSuffix,
+    const FieldNameMap& fieldMap,
+    const JavaClass* proxyJavaClass,
+    const std::vector<std::string>& typeReferenceNames) {
     if (type == kTypeClass) {
-        return registerObjectClassDelegate(className, javaClass, schemaSuffix, fieldMap, typeReferences);
+        return registerObjectClassDelegate(className, javaClass, schemaSuffix, fieldMap, typeReferenceNames);
     } else if (type == kTypeInterface) {
-        return registerInterfaceClassDelegate(className, javaClass, schemaSuffix, fieldMap, proxyClass, typeReferences);
+        SC_ASSERT(proxyJavaClass != nullptr, "Interface marshallable requires a proxy class");
+        return registerInterfaceClassDelegate(
+            className, javaClass, schemaSuffix, fieldMap, *proxyJavaClass, typeReferenceNames);
     } else if (type == kTypeStringEnum) {
         return registerStringEnumClassDelegate(className, javaClass, schemaSuffix, fieldMap);
     } else if (type == kTypeIntEnum) {
@@ -597,6 +597,209 @@ Valdi::Result<JavaClassDelegate*> AndroidValueMarshallerRegistry::getOrCreateReg
     } else {
         return Valdi::Error(STRING_FORMAT("Invalid marshallable object type '{}'", type));
     }
+}
+
+void AndroidValueMarshallerRegistry::parseDescriptorClosure(const uint8_t* data, size_t size) {
+    size_t pos = 0;
+    auto readU8 = [&](uint8_t& out) -> bool {
+        if (pos + 1 > size) {
+            return false;
+        }
+        out = data[pos++];
+        return true;
+    };
+    auto readU16 = [&](uint32_t& out) -> bool {
+        if (pos + 2 > size) {
+            return false;
+        }
+        out = static_cast<uint32_t>(data[pos]) | (static_cast<uint32_t>(data[pos + 1]) << 8);
+        pos += 2;
+        return true;
+    };
+    auto readU32 = [&](uint32_t& out) -> bool {
+        if (pos + 4 > size) {
+            return false;
+        }
+        out = static_cast<uint32_t>(data[pos]) | (static_cast<uint32_t>(data[pos + 1]) << 8) |
+              (static_cast<uint32_t>(data[pos + 2]) << 16) | (static_cast<uint32_t>(data[pos + 3]) << 24);
+        pos += 4;
+        return true;
+    };
+    auto readString = [&](std::string& out) -> bool {
+        uint32_t length = 0;
+        if (!readU32(length)) {
+            return false;
+        }
+        if (pos + length > size) {
+            return false;
+        }
+        out.assign(reinterpret_cast<const char*>(data + pos), length);
+        pos += length;
+        return true;
+    };
+
+    uint8_t version = 0;
+    if (!readU8(version) || version != kDescriptorClosureFormatVersion) {
+        SC_ASSERT(false, "Unexpected Valdi descriptor closure format version");
+        return;
+    }
+
+    uint32_t count = 0;
+    if (!readU32(count)) {
+        SC_ASSERT(false, "Malformed Valdi descriptor closure header");
+        return;
+    }
+
+    for (uint32_t i = 0; i < count; i++) {
+        std::string entryClassName;
+        uint8_t type = 0;
+        ParsedDescriptor descriptor;
+        if (!readString(entryClassName) || !readU8(type) || !readString(descriptor.schema) ||
+            !readString(descriptor.propertyReplacements) || !readString(descriptor.proxyClassName)) {
+            SC_ASSERT(false, "Malformed Valdi descriptor closure entry");
+            return;
+        }
+        descriptor.type = static_cast<int>(type);
+
+        uint32_t refCount = 0;
+        if (!readU16(refCount)) {
+            SC_ASSERT(false, "Malformed Valdi descriptor closure ref count");
+            return;
+        }
+        descriptor.typeReferenceNames.reserve(refCount);
+        for (uint32_t r = 0; r < refCount; r++) {
+            std::string refName;
+            if (!readString(refName)) {
+                SC_ASSERT(false, "Malformed Valdi descriptor closure ref");
+                return;
+            }
+            descriptor.typeReferenceNames.emplace_back(std::move(refName));
+        }
+
+        _descriptorByName[Valdi::StringBox::fromString(entryClassName)] = std::move(descriptor);
+    }
+}
+
+const AndroidValueMarshallerRegistry::ParsedDescriptor* AndroidValueMarshallerRegistry::getOrFetchDescriptorClosure(
+    const Valdi::StringBox& className) {
+    auto cached = _descriptorByName.find(className);
+    if (cached != _descriptorByName.end()) {
+        return &cached->second;
+    }
+
+    {
+        // Disabled in production to keep marshaller-resolution traces lean; uncomment to profile
+        // the batched closure fetch locally.
+        // VALDI_TRACE_META("Valdi.getDescriptorClosure", className);
+
+        auto jvmClassName = className.replacing('.', '/');
+        auto javaClass = JavaClass::resolveOrAbort(JavaEnv(), jvmClassName.getCStr());
+
+        const auto& descriptorJavaClass = ValdiMarshallableObjectDescriptorJavaClass::get();
+        // Java tracks which classes it has already packed (its own persistent set) and prunes the walk
+        // to the not-yet-resolved frontier, so we don't echo the cache back here. See
+        // ValdiMarshallableObjectDescriptor.resolvedClassNames.
+        std::initializer_list<JavaValue> parameters = {
+            JavaValue::unsafeMakeObject(javaClass.getClass()),
+        };
+        auto bufferValue = descriptorJavaClass.getDescriptorClosureMethod.call(
+            reinterpret_cast<jobject>(descriptorJavaClass.cls.getClass()), parameters.size(), parameters.begin());
+
+        jobject bufferObject = bufferValue.getObject();
+        if (bufferObject != nullptr) {
+            auto* address = static_cast<const uint8_t*>(
+                JavaEnv::accessEnvRet([&](JNIEnv& env) -> void* { return env.GetDirectBufferAddress(bufferObject); }));
+            auto capacity =
+                JavaEnv::accessEnvRet([&](JNIEnv& env) -> jlong { return env.GetDirectBufferCapacity(bufferObject); });
+            if (address != nullptr && capacity > 0) {
+                parseDescriptorClosure(address, static_cast<size_t>(capacity));
+            }
+        }
+    }
+
+    auto parsed = _descriptorByName.find(className);
+    return parsed != _descriptorByName.end() ? &parsed->second : nullptr;
+}
+
+Valdi::Result<JavaClassDelegate*> AndroidValueMarshallerRegistry::getOrCreateRegisteredMarshallableClass(
+    const Valdi::StringBox& className) {
+    auto lock = _schemaRegistry->lock();
+    const auto& it = _registeredClassByName.find(className);
+    if (it != _registeredClassByName.end()) {
+        return dynamic_cast<JavaClassDelegate*>(it->second.get());
+    }
+
+    // Disabled in production to avoid per-class trace overhead; resolveValueMarshaller (lower
+    // volume) remains as the live guard. Uncomment for local profiling.
+    // VALDI_TRACE_META("Valdi.createMarshallableClass", className);
+
+    auto jvmClassName = className.replacing('.', '/');
+    auto javaClass = JavaClass::resolveOrAbort(JavaEnv(), jvmClassName.getCStr());
+
+    // Fast path (COF-gated, default off): resolve the descriptor from the batched closure cache. One
+    // getDescriptorClosure JNI call brings in this class plus its transitive references (parsed natively
+    // from a ByteBuffer), so reference recursion below becomes cache hits with no further JNI. When the
+    // gate is off we skip straight to the legacy per-class path below.
+    if (_descriptorClosureEnabled) {
+        if (const ParsedDescriptor* cached = getOrFetchDescriptorClosure(className)) {
+            // Copy out: a subsequent closure fetch could rehash _descriptorByName and invalidate the ptr.
+            ParsedDescriptor descriptor = *cached;
+            auto fieldMap = toFieldMap(descriptor.propertyReplacements);
+            if (descriptor.type == kTypeInterface) {
+                auto proxyJvmName = Valdi::StringBox::fromString(descriptor.proxyClassName).replacing('.', '/');
+                auto proxyJavaClass = JavaClass::resolveOrAbort(JavaEnv(), proxyJvmName.getCStr());
+                return registerParsedDescriptor(className,
+                                                javaClass,
+                                                descriptor.type,
+                                                descriptor.schema,
+                                                fieldMap,
+                                                &proxyJavaClass,
+                                                descriptor.typeReferenceNames);
+            }
+            return registerParsedDescriptor(className,
+                                            javaClass,
+                                            descriptor.type,
+                                            descriptor.schema,
+                                            fieldMap,
+                                            nullptr,
+                                            descriptor.typeReferenceNames);
+        }
+    }
+
+    // Fallback: legacy per-class JNI fetch (getDescriptorForClass + per-field/array read-backs).
+    const auto& objectDescriptorJavaClass = ValdiMarshallableObjectDescriptorJavaClass::get();
+    std::initializer_list<JavaValue> parameters = {JavaValue::unsafeMakeObject(javaClass.getClass())};
+
+    JavaValue objectDescriptor;
+    {
+        // Disabled in production to avoid per-class trace overhead; uncomment for local profiling
+        // of the legacy per-class descriptor fetch.
+        // VALDI_TRACE_META("Valdi.getDescriptorForClass", className);
+        objectDescriptor = objectDescriptorJavaClass.getDescriptorForClassMethod.call(
+            reinterpret_cast<jobject>(objectDescriptorJavaClass.cls.getClass()), parameters.size(), parameters.begin());
+    }
+
+    auto type = objectDescriptorJavaClass.typeField.getFieldValue(objectDescriptor.getObject()).getInt();
+    auto schemaSuffix = toStdString(
+        JavaEnv(), objectDescriptorJavaClass.schemaField.getFieldValue(objectDescriptor.getObject()).getString());
+    auto proxyClass = objectDescriptorJavaClass.proxyClassField.getFieldValue(objectDescriptor.getObject());
+    auto typeReferences = objectDescriptorJavaClass.typeReferencesField.getFieldValue(objectDescriptor.getObject());
+    auto propertyReplacements =
+        objectDescriptorJavaClass.propertyReplacementsField.getFieldValue(objectDescriptor.getObject());
+
+    std::string propertyReplacementsStr;
+    if (!propertyReplacements.isNull()) {
+        propertyReplacementsStr = toStdString(JavaEnv(), propertyReplacements.getString());
+    }
+    auto fieldMap = toFieldMap(propertyReplacementsStr);
+    auto typeReferenceNames = javaStringArrayToVector(typeReferences);
+
+    if (type == kTypeInterface) {
+        auto proxyJavaClass = JavaClass(JavaEnv(), reinterpret_cast<jclass>(proxyClass.getObject()));
+        return registerParsedDescriptor(
+            className, javaClass, type, schemaSuffix, fieldMap, &proxyJavaClass, typeReferenceNames);
+    }
+    return registerParsedDescriptor(className, javaClass, type, schemaSuffix, fieldMap, nullptr, typeReferenceNames);
 }
 
 } // namespace ValdiAndroid

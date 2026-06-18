@@ -27,6 +27,15 @@ ValdiMarshallableObjectDescriptorJavaClass ValdiMarshallableObjectDescriptorJava
     out.getDescriptorForClassMethod =
         out.cls.getStaticMethod("getDescriptorForClass", expectedReturnType, &classType, 1, false);
 
+    auto byteBufferType = Valdi::ValueSchema::typeReference(
+        Valdi::ValueSchemaTypeReference::named(STRING_LITERAL("java/nio/ByteBuffer")));
+    std::initializer_list<Valdi::ValueSchema> getDescriptorClosureParams = {classType};
+    out.getDescriptorClosureMethod = out.cls.getStaticMethod("getDescriptorClosure",
+                                                             byteBufferType,
+                                                             getDescriptorClosureParams.begin(),
+                                                             getDescriptorClosureParams.size(),
+                                                             false);
+
     std::initializer_list<Valdi::ValueSchema> objectImplementsMethodParameters = {
         Valdi::ValueSchema::typeReference(Valdi::ValueSchemaTypeReference::named(STRING_LITERAL("java/lang/Object"))),
         Valdi::ValueSchema::typeReference(

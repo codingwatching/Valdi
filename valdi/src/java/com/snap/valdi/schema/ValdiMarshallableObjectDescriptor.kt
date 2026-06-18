@@ -3,8 +3,12 @@ package com.snap.valdi.schema
 import androidx.annotation.Keep
 import com.snap.valdi.exceptions.ValdiFatalException
 import com.snap.valdi.utils.arrayMap
+import java.io.ByteArrayOutputStream
 import java.lang.Exception
 import java.lang.reflect.Method
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.charset.StandardCharsets
 import kotlin.reflect.KClass
 
 @Keep
@@ -106,52 +110,188 @@ private constructor(val type: Int,
         @JvmStatic
         fun getDescriptorForClass(cls: Class<*>): ValdiMarshallableObjectDescriptor {
             try {
-                if (cls.isInterface) {
-                    val valdiInterface = cls.getAnnotation(ValdiInterface::class.java)
-                    if (valdiInterface != null) {
-                        return forInterface(
-                                valdiInterface.schema,
-                                valdiInterface.proxyClass.java,
-                                valdiInterface.typeReferences,
-                                valdiInterface.propertyReplacements)
-                    }
-
-                    val valdiUntyped = cls.getAnnotation(ValdiUntypedClass::class.java)
-                    if (valdiUntyped != null) {
-                        return forUntyped()
-                    }
-                }
-
-                if (cls.isEnum) {
-                    val valdiEnum = cls.getAnnotation(ValdiEnum::class.java)
-                    if (valdiEnum != null) {
-                        return when (valdiEnum.type) {
-                            ValdiEnumType.INT -> forIntEnum(valdiEnum.schema, valdiEnum.propertyReplacements)
-                            ValdiEnumType.STRING -> forStringEnum(valdiEnum.schema, valdiEnum.propertyReplacements)
-                        }
-                    }
-                }
-
-                val valdiClass = cls.getAnnotation(ValdiClass::class.java)
-                if (valdiClass != null) {
-                    return forClass(
-                            valdiClass.schema,
-                            valdiClass.typeReferences,
-                            valdiClass.propertyReplacements)
-                }
-
-                val valdiFunction = cls.getAnnotation(ValdiFunctionClass::class.java)
-                if (valdiFunction != null) {
-                    return forFunction(
-                            valdiFunction.schema,
-                            valdiFunction.typeReferences,
-                            valdiFunction.propertyReplacements)
-                }
-
-                throw Exception("Could not resolve Valdi Annotation")
+                return descriptorFromAnnotations(cls)
             } catch (exc: Throwable) {
                 ValdiFatalException.handleFatal(exc, "Could not resolve descriptor for class ${cls.name}")
             }
+        }
+
+        @JvmStatic
+        private fun descriptorFromAnnotations(cls: Class<*>): ValdiMarshallableObjectDescriptor {
+            if (cls.isInterface) {
+                val valdiInterface = cls.getAnnotation(ValdiInterface::class.java)
+                if (valdiInterface != null) {
+                    return forInterface(
+                            valdiInterface.schema,
+                            valdiInterface.proxyClass.java,
+                            valdiInterface.typeReferences,
+                            valdiInterface.propertyReplacements)
+                }
+
+                val valdiUntyped = cls.getAnnotation(ValdiUntypedClass::class.java)
+                if (valdiUntyped != null) {
+                    return forUntyped()
+                }
+            }
+
+            if (cls.isEnum) {
+                val valdiEnum = cls.getAnnotation(ValdiEnum::class.java)
+                if (valdiEnum != null) {
+                    return when (valdiEnum.type) {
+                        ValdiEnumType.INT -> forIntEnum(valdiEnum.schema, valdiEnum.propertyReplacements)
+                        ValdiEnumType.STRING -> forStringEnum(valdiEnum.schema, valdiEnum.propertyReplacements)
+                    }
+                }
+            }
+
+            val valdiClass = cls.getAnnotation(ValdiClass::class.java)
+            if (valdiClass != null) {
+                return forClass(
+                        valdiClass.schema,
+                        valdiClass.typeReferences,
+                        valdiClass.propertyReplacements)
+            }
+
+            val valdiFunction = cls.getAnnotation(ValdiFunctionClass::class.java)
+            if (valdiFunction != null) {
+                return forFunction(
+                        valdiFunction.schema,
+                        valdiFunction.typeReferences,
+                        valdiFunction.propertyReplacements)
+            }
+
+            throw Exception("Could not resolve Valdi Annotation")
+        }
+
+        // --- Batched descriptor fetch (JNI-overhead reduction). See valdi-jni-batch-plan.md ---
+
+        /** Binary format version of the buffer produced by [getDescriptorClosure]. Must match the C++
+         *  parser in AndroidValueMarshallerRegistry. Bump on any layout change. */
+        const val DESCRIPTOR_CLOSURE_FORMAT_VERSION: Int = 2
+
+        /**
+         * Type-reference classes of [cls], read from its Valdi annotation. The annotation stores them
+         * as already-resolved [KClass] (not names), so traversal needs no name→Class lookup and is
+         * classloader-safe. Enums and untyped types have none.
+         */
+        @JvmStatic
+        private fun referencedClasses(cls: Class<*>): Array<KClass<*>> {
+            return cls.getAnnotation(ValdiClass::class.java)?.typeReferences
+                ?: cls.getAnnotation(ValdiInterface::class.java)?.typeReferences
+                ?: cls.getAnnotation(ValdiFunctionClass::class.java)?.typeReferences
+                ?: emptyArray()
+        }
+
+        /**
+         * Whether [cls] is a Valdi marshallable type (carries one of the Valdi schema annotations).
+         * Type references can point at non-marshallable classes (e.g. java.lang.Object from an untyped
+         * field); those must be skipped by the closure walk — [getDescriptorForClass] would fatal on
+         * them, and the registry resolves them through its own path instead.
+         */
+        @JvmStatic
+        private fun hasValdiDescriptor(cls: Class<*>): Boolean {
+            return cls.isAnnotationPresent(ValdiClass::class.java) ||
+                cls.isAnnotationPresent(ValdiInterface::class.java) ||
+                cls.isAnnotationPresent(ValdiFunctionClass::class.java) ||
+                cls.isAnnotationPresent(ValdiEnum::class.java) ||
+                cls.isAnnotationPresent(ValdiUntypedClass::class.java)
+        }
+
+        private fun writeLengthPrefixed(out: ByteArrayOutputStream, value: String) {
+            // Payloads are ASCII (schema syntax + JVM class names), so ISO-8859-1 is a 1:1 byte copy.
+            // Length is u32: a large @ExportModel's schema can exceed 64KB, and a u16 prefix would
+            // silently truncate it (size and 0xFFFF) and desync the rest of the buffer.
+            val bytes = value.toByteArray(StandardCharsets.ISO_8859_1)
+            out.write(bytes.size and 0xFF)
+            out.write((bytes.size ushr 8) and 0xFF)
+            out.write((bytes.size ushr 16) and 0xFF)
+            out.write((bytes.size ushr 24) and 0xFF)
+            out.write(bytes)
+        }
+
+        /**
+         * JVM class names already visited by a prior [getDescriptorClosure] call (every class packed
+         * into a buffer, plus non-marshallable references that were skipped). Accumulated across calls
+         * and reused as the walk's `visited` set so each call prunes to the not-yet-resolved frontier,
+         * skipping already-cached classes and their subtrees.
+         *
+         * This mirrors the C++ registry's descriptor cache without C++ echoing it back each call: that
+         * cache belongs to a process-singleton ([ValdiValueMarshallerRegistry.shared]), is append-only,
+         * and is never cleared, so the two stay in sync by construction. Every call originates from the
+         * C++ registry under its schema-registry lock, so access here is already serialized — no extra
+         * synchronization needed. (If the two ever diverged, e.g. C++ dropped a buffer, the registry
+         * self-heals via its legacy per-class fallback.)
+         */
+        private val resolvedClassNames = HashSet<String>()
+
+        /**
+         * Resolve [root] and its transitive type-reference closure, returning every not-yet-resolved
+         * descriptor packed into one direct [ByteBuffer] for zero-copy parsing in C++. Replaces N
+         * per-class getDescriptorForClass JNI round-trips (+ per-field/array read-backs) with a single
+         * batched fetch; C++ caches the parsed descriptors by name so reference recursion becomes cache
+         * hits. Classes packed by a prior call are tracked in [resolvedClassNames] and skipped (with
+         * their subtrees), so each call costs only the new frontier, not the whole accumulated cache.
+         *
+         * Layout (little-endian, ASCII payloads):
+         *   [u8 version][u32 count] then, per entry:
+         *   [u32+className][u8 type][u32+schema][u32+propertyReplacements][u32+proxyClassName]
+         *   [u16 refCount]{ [u32+refName] }
+         */
+        @Keep
+        @JvmStatic
+        fun getDescriptorClosure(root: Class<*>): ByteBuffer {
+            // Reuse the running set directly as `visited`: classes resolved by earlier calls (and their
+            // subtrees) are skipped, so the walk only touches the new frontier. Serialized by the C++
+            // registry lock (see [resolvedClassNames]).
+            val visited = resolvedClassNames
+            val queue = ArrayDeque<Class<*>>()
+            queue.addLast(root)
+
+            val body = ByteArrayOutputStream(8192)
+            var count = 0
+
+            while (queue.isNotEmpty()) {
+                // Use removeAt(0): the remove-first extension resolves to the Java 21
+                // SequencedCollection method and NoSuchMethodErrors on older Android runtimes
+                // (banned by check_unsupported_android_15_method_usage).
+                val cls = queue.removeAt(0)
+                if (!visited.add(cls.name)) {
+                    continue
+                }
+                if (!hasValdiDescriptor(cls)) {
+                    // Non-marshallable reference (e.g. java.lang.Object from an untyped field). Don't
+                    // fetch (getDescriptorForClass would fatal) or recurse; the registry resolves such
+                    // references via its own path, falling back to legacy per-class resolution.
+                    continue
+                }
+
+                val descriptor = getDescriptorForClass(cls)
+                writeLengthPrefixed(body, cls.name)
+                body.write(descriptor.type and 0xFF)
+                writeLengthPrefixed(body, descriptor.schema)
+                writeLengthPrefixed(body, descriptor.propertyReplacements ?: "")
+                writeLengthPrefixed(body, descriptor.proxyClass?.name ?: "")
+
+                val refNames = descriptor.typeReferences ?: emptyArray()
+                body.write(refNames.size and 0xFF)
+                body.write((refNames.size ushr 8) and 0xFF)
+                for (refName in refNames) {
+                    writeLengthPrefixed(body, refName)
+                }
+                count++
+
+                for (ref in referencedClasses(cls)) {
+                    queue.addLast(ref.java)
+                }
+            }
+
+            val bodyBytes = body.toByteArray()
+            val buffer = ByteBuffer.allocateDirect(1 + 4 + bodyBytes.size).order(ByteOrder.LITTLE_ENDIAN)
+            buffer.put(DESCRIPTOR_CLOSURE_FORMAT_VERSION.toByte())
+            buffer.putInt(count)
+            buffer.put(bodyBytes)
+            buffer.flip()
+            return buffer
         }
 
         @JvmStatic
