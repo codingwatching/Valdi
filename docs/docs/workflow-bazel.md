@@ -36,16 +36,24 @@ bazel build //src/valdi_modules/src/valdi/jasmine --platforms=//bzl/platforms:io
 
 ## Maintaining `BUILD.bazel` files
 
-To ease the burden of writing and maintainting `BUILD.bazel` Valdi provides a script to automatically generate/update/format `BUILD.bazel` files based on `module.yaml` content. In addition to that, the CI infrastructure includes a pre-cool hook to validate `BUILD.bazel` files.
+A Valdi module is configured entirely through the `valdi_module(...)` call in its `BUILD.bazel`. Edit that file directly to change module configuration.
 
-To add a new dependency:
+To add a new dependency, add the module's Bazel label to the `deps` attribute of the `valdi_module()` call in `BUILD.bazel`. For example:
 
-1. Update `module.yaml`
-2. Run the script:
-
-```sh
-./scripts/regenerate_valdi_modules_build_bazel_files.sh
+```python
+valdi_module(
+    name = "my_module",
+    srcs = glob(["src/**/*.ts", "src/**/*.tsx"]),
+    deps = [
+        "@valdi//src/valdi_modules/src/valdi/valdi_core",
+        "//src/valdi_modules/src/valdi/some_other_valdi_module",
+    ],
+)
 ```
+
+See [Core Module](./core-module.md#buildbazel) for the full list of `valdi_module()` attributes.
+
+> **Note:** Older Valdi projects may have a `module.yaml` file alongside `BUILD.bazel`. `module.yaml` is deprecated; all module configuration belongs in the `valdi_module()` rule. See [glossary](./glossary.md#moduleyaml).
 
 ## Testing
 

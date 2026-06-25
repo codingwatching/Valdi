@@ -106,7 +106,7 @@ On the TypeScript side you can configure the `accessibiltyId` attribute on any v
 <view accessibilityId={this.state.name} />;
 ```
 
-Ids can also be provided by writing the accessibility ids into an `ids.yaml` file. The ids files will be generated into TypeScript, Kotlin, Swift and Objective-C. Make sure to update [module.yaml](./core-module.md#moduleyaml) to include the new file.
+Ids can also be provided by writing the accessibility ids into an `ids.yaml` file. The ids files will be generated into TypeScript, Kotlin, Swift and Objective-C. Make sure the `ids.yaml` file lives next to your module's [`BUILD.bazel`](./core-module.md#buildbazel) so it is picked up by the `valdi_module()` rule.
 
 For example, given the following `ids.yaml`:
 

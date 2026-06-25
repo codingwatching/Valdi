@@ -36,7 +36,7 @@ export function calculatorToString(calculator: ICalculator): string {
 }
 ```
 
-These will create native files with the paths and prefixes specified in this module's `module.yaml`.
+These will create native files with the paths and prefixes specified by the `ios_class_prefix` and `android_class_path` attributes on the `valdi_module()` call in this module's `BUILD.bazel`.
 
 ### Extra configuration options
 There are more options available for the `@GenerateNativeFunction` annotation.

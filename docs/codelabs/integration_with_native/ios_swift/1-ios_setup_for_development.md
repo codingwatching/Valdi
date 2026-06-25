@@ -5,14 +5,16 @@ We will create a new option in the Settings menu from scratch and will load a ne
 If you're continuing directly from the last section. You'll need to reset the Playground.tsx file back to the original to prevent compilation errors. We won't be using the Playground module in this part.
 
 ## Building your component for Swift
-In the module.yaml of the module, add `language: swift` to the `ios` section. The module.yaml should contain the following:
+In the module's `BUILD.bazel`, set `ios_language = "swift"` on the `valdi_module()` call. The relevant attributes should look like:
 
-```bazel
-ios:
-  class_prefix: SCCHelloWorld
-  module_name: SCCHelloWorld
-  language: swift
-
+```python
+valdi_module(
+    name = "hello_world",
+    # ...
+    ios_module_name = "SCCHelloWorld",
+    ios_class_prefix = "SCCHelloWorld",
+    ios_language = "swift",
+)
 ```
 
 **TODO**: Update this for open source

@@ -62,29 +62,27 @@ valdi projectsync
 ```
 
 ## Configuring a module
-In this codelab, we're working with the `tsconfig.json` and `module.yaml` defaults, but you may need custom configuration in your own projects.
+In this codelab, we're working with the `tsconfig.json` and `BUILD.bazel` defaults, but you may need custom configuration in your own projects.
 
 ### tsconfig.json
 `tsconfig.json` specifies the TypeScript compiler options. This is a standard config file, you can read more about it in the [official TypeScript documentation](https://www.typescriptlang.org/docs/handbook/tsconfig-json.html).
 
-### module.yaml
-`module.yaml` is specific to Valdi. This config file controls the compiled module output. We'll cover a few common options here but the full set of options is available in the [Core Module documentation](../../docs/core-module.md#moduleyaml).
+### BUILD.bazel
+`BUILD.bazel` configures the compiled module output via a single `valdi_module()` call. We'll cover a few common attributes here but the full set is documented in [Core Module](../../docs/core-module.md#buildbazel).
 
-Common options:
-- **`output_target`**: this can be specified globally or on a per platform basis
+Common attributes:
+- **`ios_output_target`** / **`android_output_target`**: one per platform
     - **`debug`**: for local testing and development, won't become part of release builds
     - **`release`**: ready for production
-- **`dependencies`**: the other modules that this module depends on
-- **`strings_dir`**: The location of your strings files
-- **`ios`**: this separates iOS specific configuration
-    - **`module_name`**: used for specifying build targets and naming directories
-    - **`class_prefix`**: used as a prefix for generated native code (usually the same as **`module_name`**)
-    - **`output_target`**: the same as discussed above but specific to iOS
-- **`android`**: Android specific configuration
-    - **`class_path`**: a Kotlin class path for the generated native code
-    - **`output_target`**: as discussed above
-- **`downloadable_assets`**: When enabled, assets are hosted on remote asset storage rather than bundled with the app, which reduces binary size. Note: this feature requires configuring a remote asset storage backend and is not recommended for open source projects without additional setup.
-- **`disable_precompilation`**: This only impacts Android and refers to compiling javascript into bytecode that the Android JS engine quickly run. Disabling precompilation will reduce binary size but lead to slower cold starts because the JS engine needs to parse the raw JS file.
+- **`deps`**: the other Valdi modules this module depends on (Bazel labels)
+- **`strings_dir`**: the location of your strings files
+- **`ios_module_name`**: used for specifying iOS build targets and naming directories
+- **`ios_class_prefix`**: prefix for generated iOS native code (usually the same as `ios_module_name`)
+- **`ios_language`**: `objc`, `swift`, or `["objc", "swift"]`
+- **`android_class_path`**: Kotlin package path for generated Android code
+- **`downloadable_assets`**: when `True`, assets are hosted on remote asset storage rather than bundled with the app, which reduces binary size. This requires configuring a remote asset storage backend and is not recommended for open source projects without additional setup.
+
+> **Note:** Older Valdi projects may have a `module.yaml` file alongside `BUILD.bazel`. `module.yaml` is deprecated; all module configuration belongs in the `valdi_module()` rule. See [glossary](../../docs/glossary.md#moduleyaml).
 
 ## `valdimodule` troubleshooting
 Any time you update the annotations or the definitions of the **Context**, **ViewModel**, or **Friend** objects, you will need to run the `valdi projectsync` script to regenerate the native code.

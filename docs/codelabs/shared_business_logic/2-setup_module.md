@@ -25,14 +25,14 @@ Your new code will be at `src/valdi/hello_world`
 
 You should see a handful of files and folders:
 
-- `module.yaml` - Dependencies and generated output files
+- `BUILD.bazel` - `valdi_module()` declaration with the module's dependencies and build configuration
 - `tsconfig.json` - Typescript compilation options
 - `strings.yaml` - Localized strings
 - `res/` - Image assets
 - `src/` - Typescript code
     - `HelloWorld.tsx` - Main entry component
 
-The defaults in `module.yaml` and `tsconfig.json` will work fine for our purposes but feel free to check them out. 
+The defaults in `BUILD.bazel` and `tsconfig.json` will work fine for our purposes but feel free to check them out. 
 
 This `HelloWorld.tsx` is the default starting point for UI Components but we won't need it. Go ahead and delete it.
 

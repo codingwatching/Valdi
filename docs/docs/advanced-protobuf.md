@@ -7,7 +7,7 @@ Protobuf is a message serialization library written by Google and is widely used
 
 ### Protobuf config file
 
-The Valdi Protobuf generation script can take a `proto_config.yaml` and generate API definitions for the messages which the config file includes. This file needs to be added inside the root of a Valdi module directory, same location where the `module.yaml` lives.
+The Valdi Protobuf generation script can take a `proto_config.yaml` and generate API definitions for the messages which the config file includes. This file needs to be added inside the root of a Valdi module directory, next to the module's `BUILD.bazel`.
 
 The proto config file lists all the proto files which should be included from one of the repositories declared in the `repositories` section, or from files that are in the `proto` directory.
 
@@ -32,7 +32,7 @@ apt install -y protobuf-compiler
 
 After running `generate_protos.py`, the file structure from `my_module` will then look like this:
 ```
-module.yaml
+BUILD.bazel
 proto_config.yaml
 src/proto.d.ts
 src/proto.js
@@ -49,11 +49,16 @@ Messages are exposed in namespaces to avoid conflicts. The namespace is based of
 
 ### Setting up valdi_protobuf dependency
 
-The generated messages will try to import utility classes from the `valdi_protobuf` module. We need to make sure we add a dependency to it in our `module.yaml`:
-```
-- dependencies:
-  - valdi_core
-  - valdi_protobuf
+The generated messages will try to import utility classes from the `valdi_protobuf` module. We need to make sure we add it to the `deps` attribute of the `valdi_module()` call in our `BUILD.bazel`:
+```python
+valdi_module(
+    name = "my_module",
+    # ...
+    deps = [
+        "@valdi//src/valdi_modules/src/valdi/valdi_core",
+        "@valdi//src/valdi_modules/src/valdi/valdi_protobuf",
+    ],
+)
 ```
 
 ### Decoding a message

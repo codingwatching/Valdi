@@ -7,8 +7,7 @@ To help you debug performance issues, Valdi provides a cross-platform tracing AP
 ### Recording traces
 
 > [!NOTE]
-> Please make sure to add `benchmarking` under `dependencies` and `allowed_debug_dependencies` in the module's `module.yaml` file.
-> Also add `//src/valdi_modules/src/valdi/benchmarking` to the module's `BUILD.bazel` file.
+> Please make sure to add `//src/valdi_modules/src/valdi/benchmarking` to the `deps` attribute of the `valdi_module()` call in your module's `BUILD.bazel`.
 
 #### `recordTracesWithTimeout()`
 
