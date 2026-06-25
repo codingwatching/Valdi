@@ -1,0 +1,3 @@
+# Package marker for //bzl/swift_toolchains:*.bzl files.
+# No targets declared here -- consumers load the repo / toolchain
+# helpers directly from //bzl/swift_toolchains:rules.bzl.
