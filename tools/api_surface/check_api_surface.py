@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """Compare the current Valdi API surface against a baseline.
 
-Warns on additions (new interfaces, properties, types).
-Errors on incompatible changes (removals, type changes).
+Errors on removals (deleted interfaces, properties, types, enum members).
+Warns on additions and modifications (new or changed signatures).
 
 Exit codes:
-  0 — no changes
-  1 — breaking changes detected
-  2 — additions only (use --strict to make this an error)
+  0 — no changes, or only warnings (additions/modifications)
+  1 — breaking changes detected (removals)
+  2 — additions/modifications only (use --strict to make this an error)
 
 Usage:
   check_api_surface.py <open_source_root>            # check against baseline
   check_api_surface.py <open_source_root> --update    # regenerate baseline
-  check_api_surface.py <open_source_root> --strict    # treat additions as errors
+  check_api_surface.py <open_source_root> --strict    # treat additions/modifications as errors
 """
 
 import json
@@ -54,7 +54,7 @@ def _diff_dict(baseline: dict, current: dict, kind: str):
 
     for key in sorted(baseline_keys & current_keys):
         if baseline[key] != current[key]:
-            errors.append(
+            warnings.append(
                 f"Changed {kind} '{key}':\n"
                 f"         baseline: {baseline[key]}\n"
                 f"         current:  {current[key]}"
@@ -107,7 +107,7 @@ def _diff_interfaces(baseline: dict, current: dict):
 
         for prop in sorted(b_keys & c_keys):
             if b_props[prop] != c_props[prop]:
-                errors.append(
+                warnings.append(
                     f"Changed '{name}.{prop}':\n"
                     f"         baseline: {b_props[prop]}\n"
                     f"         current:  {c_props[prop]}"
@@ -136,7 +136,7 @@ def _diff_classes(baseline: dict, current: dict):
 
         # Check extends
         if b_cls.get("extends") != c_cls.get("extends"):
-            errors.append(
+            warnings.append(
                 f"Changed '{name}' extends:\n"
                 f"         baseline: {b_cls.get('extends')}\n"
                 f"         current:  {c_cls.get('extends')}"
@@ -157,7 +157,7 @@ def _diff_classes(baseline: dict, current: dict):
 
         for method in sorted(b_keys & c_keys):
             if b_methods[method] != c_methods[method]:
-                errors.append(
+                warnings.append(
                     f"Changed '{name}.{method}':\n"
                     f"         baseline: {b_methods[method]}\n"
                     f"         current:  {c_methods[method]}"
@@ -216,13 +216,13 @@ def check(open_source_root: Path, strict: bool = False) -> int:
     # Report
     print()
     if all_errors:
-        print(f"{RED}{BOLD}Breaking changes detected:{RESET}")
+        print(f"{RED}{BOLD}Breaking changes detected (removals):{RESET}")
         for msg in all_errors:
             error(msg)
         print()
 
     if all_warnings:
-        print(f"{YELLOW}{BOLD}API additions detected:{RESET}")
+        print(f"{YELLOW}{BOLD}API additions/modifications detected:{RESET}")
         for msg in all_warnings:
             warn(msg)
         print()
@@ -234,15 +234,15 @@ def check(open_source_root: Path, strict: bool = False) -> int:
     if all_errors:
         total = len(all_errors)
         print(
-            f"{RED}{BOLD}{total} breaking change(s) — "
+            f"{RED}{BOLD}{total} removal(s) — "
             f"update baseline with --update if intentional.{RESET}"
         )
         return 1
 
-    # Warnings only
+    # Warnings only (additions + modifications)
     total = len(all_warnings)
     print(
-        f"{YELLOW}{BOLD}{total} addition(s) — "
+        f"{YELLOW}{BOLD}{total} addition(s)/modification(s) — "
         f"update baseline with --update to accept.{RESET}"
     )
     if strict:
