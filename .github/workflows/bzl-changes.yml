@@ -166,6 +166,10 @@ jobs:
           npm run cli:install
           valdi --help
 
+      - name: "Validate: External build graph"
+        if: matrix.task == 'test-cpp'
+        run: ./tools/ci/test_external_build_graph.sh
+
       - name: "Run: C++ Tests"
         if: matrix.task == 'test-cpp'
         run: ./tools/ci/run_tests.sh

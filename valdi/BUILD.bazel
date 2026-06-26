@@ -72,12 +72,27 @@ selects.config_setting_group(
     ],
 )
 
+custom_selects.config_setting_inverse(
+    "not_use_local_compiler",
+    inverse_of = "//bzl/valdi:use_local_compiler_enabled",
+)
+
+# JSCore on Linux requires the prebuilt libjsc.so, which is only available on
+# internal builds (use_local_compiler=false). External builds use Hermes/QuickJS.
+selects.config_setting_group(
+    name = "jscore_available_on_linux",
+    match_all = [
+        "//bzl/conditions:linux_x64",
+        ":not_use_local_compiler",
+    ],
+)
+
 selects.config_setting_group(
     name = "jscore_enabled",
     match_any = [
         "//bzl/conditions:ios",
         "//bzl/conditions:macos",
-        "//bzl/conditions:linux_x64",
+        ":jscore_available_on_linux",
     ],
 )
 
