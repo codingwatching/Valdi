@@ -160,7 +160,7 @@ jobs:
         run: |
           mkdir -p ~/.npm-global/lib
           npm config set prefix '~/.npm-global'
-          npm install -g npm@8
+          npm install -g npm@11
           export PATH=~/.npm-global/bin:$PATH
           cd npm_modules/cli
           npm run cli:install

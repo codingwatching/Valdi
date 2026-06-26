@@ -56,7 +56,7 @@ pushd "$OPEN_SOURCE_DIR"
 # Reroute global because we can't sudo anything
 mkdir -p ~/.npm-global/lib
 npm config set prefix '~/.npm-global'
-npm install -g npm@8
+npm install -g npm@11
 PATH=~/.npm-global/bin:$PATH
 
 # Optional: Setup git credentials for internal CI (not mirrored to external repos)
