@@ -178,12 +178,44 @@ jobs:
         if: matrix.task == 'build-compiler'
         run: bazel build //compiler/compiler:local_valdi_compiler --//bzl/valdi:use_local_compiler=true
 
-      - name: "Run: Build & Export"
+      - name: "Run: Build core targets"
         if: matrix.task == 'build-export'
         run: |
           export PATH=~/.npm-global/bin:$PATH
           ./tools/ci/build_core_targets.sh
+        env:
+          OPEN_SOURCE_DIR: ${{ github.workspace }}
+          PROJECT_ROOT: /tmp/valdi_app
+
+      - name: Refresh Bazel cache auth (pre-test_exported_lib)
+        if: matrix.task == 'build-export'
+        uses: ./.github/actions/bazel-cache-refresh
+        with:
+          gcp_project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: "Run: Test exported lib"
+        if: matrix.task == 'build-export'
+        run: |
+          export PATH=~/.npm-global/bin:$PATH
           ./tools/ci/test_exported_lib.sh
+        env:
+          OPEN_SOURCE_DIR: ${{ github.workspace }}
+          PROJECT_ROOT: /tmp/valdi_app
+
+      - name: Refresh Bazel cache auth (pre-bootstrap_app)
+        if: matrix.task == 'build-export'
+        uses: ./.github/actions/bazel-cache-refresh
+        with:
+          gcp_project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: "Run: Bootstrap app"
+        if: matrix.task == 'build-export'
+        run: |
+          export PATH=~/.npm-global/bin:$PATH
           ./tools/ci/bootstrap_app.sh
         env:
           OPEN_SOURCE_DIR: ${{ github.workspace }}
