@@ -63,6 +63,18 @@ jobs:
     runs-on: macos-latest
 
     steps:
+      - name: Free disk space
+        run: |
+          # The smoke tests bootstrap two separate Bazel workspaces (ui_app +
+          # cli_app) which can exhaust the runner's disk. Remove large unused
+          # components to reclaim ~5-8 GB.
+          xcrun simctl delete unavailable 2>/dev/null || true
+          sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/* 2>/dev/null || true
+          rm -rf ~/Library/Android/sdk/system-images 2>/dev/null || true
+          sudo rm -rf /usr/local/share/powershell 2>/dev/null || true
+          sudo rm -rf /usr/local/share/dotnet 2>/dev/null || true
+          df -h /
+
       - name: Checkout code
         uses: actions/checkout@v4
 

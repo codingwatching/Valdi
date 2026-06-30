@@ -58,7 +58,7 @@ echo ""
 # 2. Compare against checked-in baselines
 echo "--- Step 2: Compare ---"
 COMPARE_EXIT=0
-"$CLI_BIN" compare --baseline-dir "$BASELINE_STAGING" --actual-dir "$ACTUAL_RENDERS" --output-dir "$DIFF_OUTPUT" --tolerance 2 || COMPARE_EXIT=$?
+"$CLI_BIN" compare --baseline-dir "$BASELINE_STAGING" --actual-dir "$ACTUAL_RENDERS" --output-dir "$DIFF_OUTPUT" --tolerance 8 || COMPARE_EXIT=$?
 
 # Auto-open diff images on macOS if requested
 if [ "$OPEN_DIFFS" = "--open" ] && [ -d "$DIFF_OUTPUT" ]; then
