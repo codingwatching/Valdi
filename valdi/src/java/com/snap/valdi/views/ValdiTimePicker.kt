@@ -182,7 +182,7 @@ open class ValdiTimePicker(context: Context) : ViewGroup(context), ValdiTouchTar
         c.set(Calendar.HOUR_OF_DAY, currentHour)
         c.set(Calendar.MINUTE, currentMinute)
         overlayLabel.text = DateFormat.getTimeFormat(context).format(c.time)
-        ViewUtils.findViewNode(this)?.invalidateLayout()
+        ViewUtils.invalidateLayout(this)
     }
 
     private fun resolveActivity(): Activity? {
