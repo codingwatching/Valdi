@@ -131,4 +131,8 @@ bool ValdiRuntimeTweaks::enableMmapModuleArchives() const {
     return getConfigKey("VALDI_ENABLE_MMAP_MODULE_ARCHIVES");
 }
 
+bool ValdiRuntimeTweaks::enableFixFlexBasisFitContent() const {
+    return getConfigKey("VALDI_ENABLE_FIX_FLEX_BASIS_FIT_CONTENT");
+}
+
 } // namespace Valdi

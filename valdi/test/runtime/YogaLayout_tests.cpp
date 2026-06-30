@@ -1257,4 +1257,159 @@ TEST(YogaLayout, zeroSizeContainer) {
     ASSERT_EQ(50.0f, child->getCalculatedFrame().height);
 }
 
+TEST(YogaLayout, scrollContainerClampsToParentHeight) {
+    ViewNodeTestsDependencies utils;
+
+    auto root = utils.createLayout();
+    auto scroll = utils.createLayout();
+    auto child = utils.createLayout();
+
+    utils.setViewNodeAttribute(root, "width", Value(390.0));
+    utils.setViewNodeAttribute(root, "height", Value(844.0));
+
+    utils.setViewNodeAttribute(scroll, "overflow", Value(STRING_LITERAL("scroll")));
+    scroll->getAttributesApplier().flush(utils.getViewTransactionScope());
+
+    utils.setViewNodeAttribute(child, "height", Value(2000.0));
+    child->getAttributesApplier().flush(utils.getViewTransactionScope());
+
+    scroll->appendChild(utils.getViewTransactionScope(), child);
+    root->appendChild(utils.getViewTransactionScope(), scroll);
+
+    root->performLayout(utils.getViewTransactionScope(), Size(390, 844), LayoutDirectionLTR);
+
+    // Scroll container should clamp to parent height, not expand to content
+    ASSERT_EQ(390.0f, scroll->getCalculatedFrame().width);
+    ASSERT_EQ(844.0f, scroll->getCalculatedFrame().height);
+    // Child inside scroll should keep its full height
+    ASSERT_EQ(2000.0f, child->getCalculatedFrame().height);
+}
+
+TEST(YogaLayout, scrollContainerClampsWithMultipleChildren) {
+    ViewNodeTestsDependencies utils;
+
+    auto root = utils.createLayout();
+    auto scroll = utils.createLayout();
+
+    utils.setViewNodeAttribute(root, "width", Value(390.0));
+    utils.setViewNodeAttribute(root, "height", Value(844.0));
+
+    utils.setViewNodeAttribute(scroll, "overflow", Value(STRING_LITERAL("scroll")));
+    utils.setViewNodeAttribute(scroll, "flexGrow", Value(1.0));
+    scroll->getAttributesApplier().flush(utils.getViewTransactionScope());
+
+    root->appendChild(utils.getViewTransactionScope(), scroll);
+
+    float totalChildHeight = 0;
+    for (int i = 0; i < 5; i++) {
+        auto child = utils.createLayout();
+        utils.setViewNodeAttribute(child, "height", Value(400.0));
+        child->getAttributesApplier().flush(utils.getViewTransactionScope());
+        scroll->appendChild(utils.getViewTransactionScope(), child);
+        totalChildHeight += 400.0f;
+    }
+
+    root->performLayout(utils.getViewTransactionScope(), Size(390, 844), LayoutDirectionLTR);
+
+    // Scroll container must not grow to total content height (2000)
+    ASSERT_EQ(844.0f, scroll->getCalculatedFrame().height);
+    ASSERT_GT(totalChildHeight, scroll->getCalculatedFrame().height);
+}
+
+TEST(YogaLayout, scrollContainerClampsWithSiblings) {
+    ViewNodeTestsDependencies utils;
+
+    auto root = utils.createLayout();
+    auto header = utils.createLayout();
+    auto scroll = utils.createLayout();
+    auto child = utils.createLayout();
+
+    utils.setViewNodeAttribute(root, "width", Value(390.0));
+    utils.setViewNodeAttribute(root, "height", Value(844.0));
+
+    utils.setViewNodeAttribute(header, "height", Value(100.0));
+    header->getAttributesApplier().flush(utils.getViewTransactionScope());
+
+    utils.setViewNodeAttribute(scroll, "overflow", Value(STRING_LITERAL("scroll")));
+    utils.setViewNodeAttribute(scroll, "flexShrink", Value(1.0));
+    scroll->getAttributesApplier().flush(utils.getViewTransactionScope());
+
+    utils.setViewNodeAttribute(child, "height", Value(3000.0));
+    child->getAttributesApplier().flush(utils.getViewTransactionScope());
+
+    scroll->appendChild(utils.getViewTransactionScope(), child);
+    root->appendChild(utils.getViewTransactionScope(), header);
+    root->appendChild(utils.getViewTransactionScope(), scroll);
+
+    root->performLayout(utils.getViewTransactionScope(), Size(390, 844), LayoutDirectionLTR);
+
+    // Header takes 100; scroll should not exceed remaining space
+    ASSERT_EQ(100.0f, header->getCalculatedFrame().height);
+    ASSERT_LE(scroll->getCalculatedFrame().height, 844.0f);
+    // Content inside scroll should keep full height
+    ASSERT_EQ(3000.0f, child->getCalculatedFrame().height);
+}
+
+TEST(YogaLayout, nonScrollOverflowHiddenDoesNotClamp) {
+    ViewNodeTestsDependencies utils;
+
+    auto root = utils.createLayout();
+    auto container = utils.createLayout();
+    auto child = utils.createLayout();
+
+    utils.setViewNodeAttribute(root, "width", Value(390.0));
+    utils.setViewNodeAttribute(root, "height", Value(844.0));
+
+    utils.setViewNodeAttribute(container, "overflow", Value(STRING_LITERAL("hidden")));
+    container->getAttributesApplier().flush(utils.getViewTransactionScope());
+
+    utils.setViewNodeAttribute(child, "height", Value(2000.0));
+    child->getAttributesApplier().flush(utils.getViewTransactionScope());
+
+    container->appendChild(utils.getViewTransactionScope(), child);
+    root->appendChild(utils.getViewTransactionScope(), container);
+
+    root->performLayout(utils.getViewTransactionScope(), Size(390, 844), LayoutDirectionLTR);
+
+    // overflow:hidden container should NOT clamp — it grows to content
+    ASSERT_EQ(2000.0f, container->getCalculatedFrame().height);
+}
+
+TEST(YogaLayout, rowWithPercentageChildrenExceeding100) {
+    ViewNodeTestsDependencies utils;
+
+    auto root = utils.createLayout();
+    auto row = utils.createLayout();
+
+    utils.setViewNodeAttribute(root, "width", Value(390.0));
+    utils.setViewNodeAttribute(root, "height", Value(844.0));
+
+    utils.setViewNodeAttribute(row, "flexDirection", Value(STRING_LITERAL("row")));
+    utils.setViewNodeAttribute(row, "justifyContent", Value(STRING_LITERAL("space-evenly")));
+    row->getAttributesApplier().flush(utils.getViewTransactionScope());
+
+    root->appendChild(utils.getViewTransactionScope(), row);
+
+    std::vector<Ref<ViewNode>> children;
+    for (int i = 0; i < 5; i++) {
+        auto child = utils.createLayout();
+        utils.setViewNodeAttribute(child, "width", Value(STRING_LITERAL("25%")));
+        utils.setViewNodeAttribute(child, "height", Value(60.0));
+        child->getAttributesApplier().flush(utils.getViewTransactionScope());
+        row->appendChild(utils.getViewTransactionScope(), child);
+        children.push_back(child);
+    }
+
+    root->performLayout(utils.getViewTransactionScope(), Size(390, 844), LayoutDirectionLTR);
+
+    // All 5 children at 25% = 125% total. They should all be laid out
+    // (with negative spacing from space-evenly), not clipped at the 4th.
+    ASSERT_EQ(390.0f, row->getCalculatedFrame().width);
+    for (int i = 0; i < 5; i++) {
+        ASSERT_GT(children[i]->getCalculatedFrame().width, 0.0f);
+    }
+    // Last child should start within or at the row boundary, not beyond it
+    ASSERT_LE(children[4]->getCalculatedFrame().getLeft(), 390.0f);
+}
+
 } // namespace ValdiTest

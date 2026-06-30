@@ -50,7 +50,7 @@
 #include "valdi_core/cpp/Utils/ValueTypedProxyObject.hpp"
 #include "valdi_test_utils.hpp"
 #include "gtest/gtest.h"
-#include <yoga/YGNode.h>
+#include <yoga/node/Node.h>
 
 #include "valdi_core/cpp/Marshalling/RegisteredCppGeneratedClass.hpp"
 #include "valdi_modules/test/test.hpp"
@@ -1117,26 +1117,26 @@ TEST_P(RuntimeFixture, canSetupFlexboxTree) {
     wrapper.waitUntilAllUpdatesCompleted();
 
     auto rootViewNode = tree->getRootViewNode();
-    auto rootYogaNode = rootViewNode->getYogaNode();
+    auto* rootYogaNode = facebook::yoga::resolveRef(rootViewNode->getYogaNode());
 
     ASSERT_NE(nullptr, rootYogaNode);
     ASSERT_EQ(rootViewNode.get(), Valdi::Yoga::getAttachedViewNode(rootYogaNode));
 
     ASSERT_EQ(2, static_cast<int>(rootYogaNode->getChildren().size()));
 
-    auto firstChild = rootYogaNode->getChild(0);
+    auto* firstChild = rootYogaNode->getChild(0);
     ASSERT_EQ(rootViewNode->copyChildren()[0].get(), Valdi::Yoga::getAttachedViewNode(firstChild));
 
     ASSERT_EQ(0, static_cast<int>(firstChild->getChildren().size()));
 
-    auto secondChild = rootYogaNode->getChild(1);
+    auto* secondChild = rootYogaNode->getChild(1);
     auto secondChildNode = rootViewNode->copyChildren()[1];
 
     ASSERT_EQ(secondChildNode.get(), Valdi::Yoga::getAttachedViewNode(secondChild));
     ASSERT_EQ(3, static_cast<int>(secondChild->getChildren().size()));
 
     size_t i = 0;
-    for (const auto& child : secondChild->getChildren()) {
+    for (auto* child : secondChild->getChildren()) {
         ASSERT_EQ(secondChildNode->copyChildren()[i].get(), Valdi::Yoga::getAttachedViewNode(child));
 
         ASSERT_EQ(0, static_cast<int>(child->getChildren().size()));
@@ -1155,7 +1155,7 @@ TEST_P(RuntimeFixture, canSetupFlexboxTreeWithChildDocument) {
     wrapper.waitUntilAllUpdatesCompleted();
 
     auto rootViewNode = tree->getRootViewNode();
-    auto rootYogaNode = rootViewNode->getYogaNode();
+    auto* rootYogaNode = facebook::yoga::resolveRef(rootViewNode->getYogaNode());
 
     ASSERT_NE(nullptr, rootYogaNode);
     ASSERT_EQ(rootViewNode.get(), Valdi::Yoga::getAttachedViewNode(rootYogaNode));
@@ -1172,7 +1172,7 @@ TEST_P(RuntimeFixture, canSetupFlexboxTreeWithChildDocument) {
     ASSERT_EQ(1, static_cast<int>(rootYogaNode->getChildren().size()));
 
     auto containerViewNode = rootViewNode->copyChildren()[0];
-    auto containerYogaNode = rootYogaNode->getChild(0);
+    auto* containerYogaNode = rootYogaNode->getChild(0);
 
     ASSERT_EQ(containerViewNode.get(), Valdi::Yoga::getAttachedViewNode(containerYogaNode));
 
@@ -1185,24 +1185,24 @@ TEST_P(RuntimeFixture, canSetupFlexboxTreeWithChildDocument) {
 
     // We should have the full flexbox tree of the child context attached to this flexbox node tree
 
-    auto childRootYogaNode = containerYogaNode->getChild(0);
+    auto* childRootYogaNode = containerYogaNode->getChild(0);
 
     ASSERT_EQ(2, static_cast<int>(childRootYogaNode->getChildren().size()));
 
-    auto firstChild = childRootYogaNode->getChild(0);
+    auto* firstChild = childRootYogaNode->getChild(0);
 
     ASSERT_EQ(childContextViewNode->copyChildren()[0].get(), Valdi::Yoga::getAttachedViewNode(firstChild));
 
     ASSERT_EQ(0, static_cast<int>(firstChild->getChildren().size()));
 
-    auto secondChild = childRootYogaNode->getChild(1);
+    auto* secondChild = childRootYogaNode->getChild(1);
     auto secondChildNode = childContextViewNode->copyChildren()[1];
 
     ASSERT_EQ(secondChildNode.get(), Valdi::Yoga::getAttachedViewNode(secondChild));
     ASSERT_EQ(3, static_cast<int>(secondChild->getChildren().size()));
 
     size_t i = 0;
-    for (const auto& child : secondChild->getChildren()) {
+    for (auto* child : secondChild->getChildren()) {
         ASSERT_EQ(secondChildNode->copyChildren()[i].get(), Valdi::Yoga::getAttachedViewNode(child));
 
         ASSERT_EQ(0, static_cast<int>(child->getChildren().size()));
@@ -1351,7 +1351,7 @@ TEST_P(RuntimeFixture, canSetupFlexboxTreeWithRenderIfs) {
     wrapper.waitUntilAllUpdatesCompleted();
 
     auto rootViewNode = tree->getRootViewNode();
-    auto rootYogaNode = rootViewNode->getYogaNode();
+    auto* rootYogaNode = facebook::yoga::resolveRef(rootViewNode->getYogaNode());
 
     // All ViewNodes should be generated
 
@@ -1372,11 +1372,11 @@ TEST_P(RuntimeFixture, canSetupFlexboxTreeWithRenderIfs) {
 
     ASSERT_EQ(2, static_cast<int>(rootYogaNode->getChildren().size()));
 
-    auto child2YogaNode = rootYogaNode->getChild(0);
-    auto child4YogaNode = rootYogaNode->getChild(1);
+    auto* child2YogaNode = rootYogaNode->getChild(0);
+    auto* child4YogaNode = rootYogaNode->getChild(1);
 
-    ASSERT_EQ(child2YogaNode, child2ViewNode->getYogaNode());
-    ASSERT_EQ(child4YogaNode, child4ViewNode->getYogaNode());
+    ASSERT_EQ(child2ViewNode->getYogaNode(), static_cast<YGNode*>(child2YogaNode));
+    ASSERT_EQ(child4ViewNode->getYogaNode(), static_cast<YGNode*>(child4YogaNode));
 
     // We then add child3
 
@@ -1390,9 +1390,9 @@ TEST_P(RuntimeFixture, canSetupFlexboxTreeWithRenderIfs) {
     auto child3ViewNode = child3ViewNodes[0];
 
     ASSERT_EQ(3, static_cast<int>(rootYogaNode->getChildren().size()));
-    ASSERT_EQ(child2ViewNode->getYogaNode(), rootYogaNode->getChild(0));
-    ASSERT_EQ(child3ViewNode->getYogaNode(), rootYogaNode->getChild(1));
-    ASSERT_EQ(child4ViewNode->getYogaNode(), rootYogaNode->getChild(2));
+    ASSERT_EQ(child2ViewNode->getYogaNode(), static_cast<YGNode*>(rootYogaNode->getChild(0)));
+    ASSERT_EQ(child3ViewNode->getYogaNode(), static_cast<YGNode*>(rootYogaNode->getChild(1)));
+    ASSERT_EQ(child4ViewNode->getYogaNode(), static_cast<YGNode*>(rootYogaNode->getChild(2)));
 
     // We now insert the last child, child1
 
@@ -1406,10 +1406,10 @@ TEST_P(RuntimeFixture, canSetupFlexboxTreeWithRenderIfs) {
     auto child1ViewNode = child1ViewNodes[0];
 
     ASSERT_EQ(4, static_cast<int>(rootYogaNode->getChildren().size()));
-    ASSERT_EQ(child1ViewNode->getYogaNode(), rootYogaNode->getChild(0));
-    ASSERT_EQ(child2ViewNode->getYogaNode(), rootYogaNode->getChild(1));
-    ASSERT_EQ(child3ViewNode->getYogaNode(), rootYogaNode->getChild(2));
-    ASSERT_EQ(child4ViewNode->getYogaNode(), rootYogaNode->getChild(3));
+    ASSERT_EQ(child1ViewNode->getYogaNode(), static_cast<YGNode*>(rootYogaNode->getChild(0)));
+    ASSERT_EQ(child2ViewNode->getYogaNode(), static_cast<YGNode*>(rootYogaNode->getChild(1)));
+    ASSERT_EQ(child3ViewNode->getYogaNode(), static_cast<YGNode*>(rootYogaNode->getChild(2)));
+    ASSERT_EQ(child4ViewNode->getYogaNode(), static_cast<YGNode*>(rootYogaNode->getChild(3)));
 
     // Now removing all the render-if nodes
 
@@ -1419,8 +1419,8 @@ TEST_P(RuntimeFixture, canSetupFlexboxTreeWithRenderIfs) {
     wrapper.waitUntilAllUpdatesCompleted();
 
     ASSERT_EQ(2, static_cast<int>(rootYogaNode->getChildren().size()));
-    ASSERT_EQ(child2ViewNode->getYogaNode(), rootYogaNode->getChild(0));
-    ASSERT_EQ(child4ViewNode->getYogaNode(), rootYogaNode->getChild(1));
+    ASSERT_EQ(child2ViewNode->getYogaNode(), static_cast<YGNode*>(rootYogaNode->getChild(0)));
+    ASSERT_EQ(child4ViewNode->getYogaNode(), static_cast<YGNode*>(rootYogaNode->getChild(1)));
 }
 
 TEST_P(RuntimeFixture, jsCanAttachToMainThread) {

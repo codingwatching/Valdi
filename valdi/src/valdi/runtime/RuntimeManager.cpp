@@ -13,6 +13,7 @@
 #include "valdi/runtime/Resources/BytesAssetLoader.hpp"
 #include "valdi/runtime/ValdiBuildFlags.hpp"
 #include "valdi/runtime/ValdiRuntimeTweaks.hpp"
+#include <yoga/Yoga.h>
 
 #include "valdi/runtime/Resources/AssetLoaderManager.hpp"
 
@@ -577,6 +578,11 @@ void RuntimeManager::setTweakValueProvider(const Shared<ITweakValueProvider>& tw
         anrDetectorListener->setShouldCrashOnANR(runtimeTweaks != nullptr ? runtimeTweaks->shouldCrashOnANR() : false);
     }
     _anrDetector->setNudgeEnabled(runtimeTweaks != nullptr ? runtimeTweaks->shouldNudgeJSThread() : false);
+
+    YGConfigSetExperimentalFeatureEnabled(_yogaConfig.get(),
+                                          YGExperimentalFeatureFixFlexBasisFitContent,
+                                          runtimeTweaks != nullptr ? runtimeTweaks->enableFixFlexBasisFitContent() :
+                                                                     false);
 
     auto disableAnimationRemoveOnCompleteIos =
         runtimeTweaks != nullptr ? runtimeTweaks->disableAnimationRemoveOnCompleteIos() : false;
