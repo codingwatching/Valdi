@@ -1240,6 +1240,23 @@ export interface TextField extends _TextField, CommonEditTextInterface {
    * of the rendered elements.
    */
   ref?: IRenderedElementHolder<this>;
+
+  /**
+   * When true, the text field reduces the font size until the text fits within its bounding
+   * rectangle, or reaches the minimum font size set by minimumScaleFactor.
+   * @default: false
+   * @note Does not support AttributedText values on iOS (UIKit strips formatting during scaling).
+   * @see minimumScaleFactor
+   */
+  adjustsFontSizeToFitWidth?: boolean;
+
+  /**
+   * The smallest multiplier for the current font size that yields an acceptable font size
+   * when shrinking text to fit. Used in conjunction with adjustsFontSizeToFitWidth.
+   * @default: 0
+   * @see adjustsFontSizeToFitWidth
+   */
+  minimumScaleFactor?: number;
 }
 
 /**

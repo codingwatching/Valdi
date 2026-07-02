@@ -48,6 +48,8 @@
     id<SCValdiFunction> _Nullable _onSelectionChange;
 
     SCValdiTextInputUnfocusReason _lastUnfocusReason;
+
+    CGFloat _minimumScaleFactor;
 }
 
 #pragma mark - UIView methods
@@ -326,6 +328,9 @@ static void SCValdiCallEventWithReason(id<SCValdiFunction> function, UITextField
 
         SCValdiFontAttributes *fontAttributes = [self fontAttributes];
 
+        UIFont *resolvedFont = [fontAttributes.font resolveFontFromTraitCollection:traitCollection];
+        self.minimumFontSize = _minimumScaleFactor * resolvedFont.pointSize;
+
         if ([self _needAttributedString]) {
             NSAttributedString *attributedString = [NSAttributedString attributedStringWithValdiText:_textValue
                                                                                              attributes:[fontAttributes resolveAttributesWithIsRightToLeft:isRightToLeft traitCollection:traitCollection]
@@ -347,7 +352,7 @@ static void SCValdiCallEventWithReason(id<SCValdiFunction> function, UITextField
 
             [self updateLabelMode:SCValdiTextModeText];;
 
-            UIFont *font = [fontAttributes.font resolveFontFromTraitCollection:traitCollection];
+            UIFont *font = resolvedFont;
             if (self.font != font) {
                 self.font = font;
             }
@@ -835,6 +840,29 @@ static void SCValdiCallEventWithReason(id<SCValdiFunction> function, UITextField
         }
         resetBlock:^(SCValdiTextField *textField, id<SCValdiAnimatorProtocol> animator) {
             SCValdiTextInputSetTextDirection(textField, nil);
+        }];
+
+    [attributesBinder bindAttribute:@"adjustsFontSizeToFitWidth"
+        invalidateLayoutOnChange:YES
+        withBoolBlock:^BOOL(SCValdiTextField *textField, BOOL attributeValue, id<SCValdiAnimatorProtocol> animator) {
+            textField.adjustsFontSizeToFitWidth = attributeValue;
+            return YES;
+        }
+        resetBlock:^(SCValdiTextField *textField, id<SCValdiAnimatorProtocol> animator) {
+            textField.adjustsFontSizeToFitWidth = NO;
+        }];
+
+    [attributesBinder bindAttribute:@"minimumScaleFactor"
+        invalidateLayoutOnChange:YES
+        withDoubleBlock:^BOOL(SCValdiTextField *textField, CGFloat attributeValue, id<SCValdiAnimatorProtocol> animator) {
+            textField->_minimumScaleFactor = attributeValue;
+            UIFont *font = [[textField fontAttributes].font resolveFontFromTraitCollection:textField.valdiContext.traitCollection];
+            textField.minimumFontSize = attributeValue * font.pointSize;
+            return YES;
+        }
+        resetBlock:^(SCValdiTextField *textField, id<SCValdiAnimatorProtocol> animator) {
+            textField->_minimumScaleFactor = 0;
+            textField.minimumFontSize = 0;
         }];
 }
 
