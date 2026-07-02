@@ -36,6 +36,11 @@ internal class TouchDispatcherNewExperience(
 
     private val candidateViews = mutableMapOf<View, MutableList<Int>>()
 
+    // True for the duration of a touch-down capture once a ValdiTouchTarget opting into
+    // allowSiblingCaptureBelow is hit, so lower-z siblings (e.g. an entity occluded by the
+    // carousel) are still captured instead of being shadowed by the topmost target.
+    private var passThroughSiblingCapture = false
+
     private var gestureRecognizersToStart = mutableListOf<ValdiGestureRecognizer>()
 
     private var lastEvent: MotionEvent? = null
@@ -164,6 +169,10 @@ internal class TouchDispatcherNewExperience(
                 }
             }
 
+            if (view.allowSiblingCaptureBelow) {
+                passThroughSiblingCapture = true
+            }
+
             return true;
         }
 
@@ -175,11 +184,21 @@ internal class TouchDispatcherNewExperience(
                 child ?: continue
 
                 // TODO(2951) actually fix hitTest for gestures for all events
+                // Scope the pass-through to this level: a child subtree keeps normal topmost-wins
+                // capture, but an opted-in hit still suppresses the break for lower-z siblings here.
+                val savedPassThroughSiblingCapture = passThroughSiblingCapture
+                passThroughSiblingCapture = false
                 val didHit = adjustEventCoordinatesToView(view, child, event) {
                     captureCandidates(child, event, pointerIndex)
                 }
+                // Only restore the opt-in on a miss: a hitting solid sibling keeps its own (false)
+                // state so it breaks and resumes topmost-wins, rather than leaking capture to
+                // even-lower siblings.
+                if (!didHit) {
+                    passThroughSiblingCapture = savedPassThroughSiblingCapture
+                }
 
-                if (didHit && !captureAllHitTargets) {
+                if (didHit && !captureAllHitTargets && !passThroughSiblingCapture) {
                     break
                 }
             }
@@ -528,6 +547,8 @@ internal class TouchDispatcherNewExperience(
             if (isPointerDown || isDown) {
                 // Step 1, we capture all the views and their gesture recognizers which are within the event's target.
                 // We only do this on touch down, or for new pointers, we capture all their potential gesture recognizers as well
+                // Reset per pointer so a prior pointer's sibling-capture opt-in can't leak into this capture.
+                passThroughSiblingCapture = false
                 captureCandidates(rootView, event, event.actionIndex)
             }
 
@@ -688,6 +709,7 @@ internal class TouchDispatcherNewExperience(
         //              dismissal. This means some gestures can be removed while we're iterating
         //              over the function, and the the last event isn't super reliable.
         candidateViews.clear()
+        passThroughSiblingCapture = false
         val storedLastEvent = lastEvent
 
         var index = candidateGestureRecognizers.size
