@@ -77,7 +77,7 @@ jobs:
     name: Build bootstrapped app (release test)
     needs: detect-changes
     if: needs.detect-changes.outputs.cli == 'true'
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

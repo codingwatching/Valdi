@@ -60,7 +60,7 @@ concurrency:
 jobs:
   smoke-test:
     name: Valdi Smoke Tests
-    runs-on: macos-latest
+    runs-on: macos-26
 
     steps:
       - name: Free disk space
@@ -204,7 +204,7 @@ jobs:
 
   snapshot-tests:
     name: Snapshot Tests
-    runs-on: macos-latest
+    runs-on: macos-26
 
     steps:
       - name: Checkout code
