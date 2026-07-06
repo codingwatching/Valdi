@@ -101,6 +101,16 @@ cc_test(
     ],
 )
 
+cc_test(
+    name = "yoga_progress_bar_test",
+    srcs = ["test/SegmentedProgressBarLayout_test.cpp"],
+    copts = COMPILER_FLAGS,
+    deps = [
+        ":yoga",
+        "@gtest//:gtest_main",
+    ],
+)
+
 cc_binary(
     name = "yoga_debug_layout",
     srcs = ["test/debug_layout.cpp"],
