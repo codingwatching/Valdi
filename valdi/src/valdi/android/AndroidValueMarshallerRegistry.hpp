@@ -88,6 +88,11 @@ public:
     // (COF-gated, set once at startup). See ValdiValueMarshallerRegistry.setDescriptorClosureEnabled.
     void setDescriptorClosureEnabled(bool enabled);
 
+    // Enables lazy resolution of function synchronous-value return marshallers (deferred to first call
+    // instead of root-create). Default off; set once at startup via the COF. See
+    // ValueMarshallerRegistry.setLazyFunctionReturnMarshallerEnabled.
+    void setLazyFunctionReturnMarshallerEnabled(bool enabled);
+
 private:
     // Parsed form of a class's marshalling descriptor, sourced either from the legacy per-class JNI
     // call or from a batched getDescriptorClosure ByteBuffer. Holds the data C++ needs to register the

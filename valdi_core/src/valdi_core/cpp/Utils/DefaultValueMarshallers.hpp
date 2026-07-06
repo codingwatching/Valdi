@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "valdi_core/cpp/Schema/ValueSchemaRegistry.hpp"
 #include "valdi_core/cpp/Utils/DjinniUtils.hpp"
 #include "valdi_core/cpp/Utils/InlineContainerAllocator.hpp"
 #include "valdi_core/cpp/Utils/PlatformObjectAttachments.hpp"
@@ -17,7 +18,10 @@
 #include "valdi_core/cpp/Utils/ValueMarshaller.hpp"
 #include "valdi_core/cpp/Utils/ValueTypedArray.hpp"
 #include "valdi_core/cpp/Utils/ValueTypedProxyObject.hpp"
+#include <atomic>
 #include <fmt/format.h>
+#include <functional>
+#include <mutex>
 
 namespace Valdi {
 
@@ -1363,6 +1367,101 @@ protected:
     ValueMarshaller<ValueType>* _inner = nullptr;
     Ref<ValueMarshallerProcessor<ValueType>> _processor;
     bool _optional;
+};
+
+/**
+ ValueMarshaller that resolves its inner marshaller lazily, on the first marshall()/unmarshall() call,
+ instead of when the owning registry is built. Used for function/Provider return types so that a tool's
+ dependency type closure is not resolved+bound on the root-create / CCD critical path; the real return
+ marshaller is resolved on the first call that actually marshalls a return value, then cached.
+
+ Optionality is reported from the return schema (known statically, without forcing resolution), and the
+ resolved inner performs the actual null-handling, so runtime behaviour matches the eager path. Lazy
+ resolution mutates the registry, so it is only safe while marshalling runs on the thread that owns the
+ registry build (true for the SnapEditor first-render path, which marshalls on the Valdi JS thread); a
+ form that defers resolution across threads must lock the registry on the resolve path.
+ */
+template<typename ValueType>
+class LazyFunctionReturnValueMarshaller : public ValueMarshaller<ValueType> {
+public:
+    using Resolver = std::function<Ref<ValueMarshaller<ValueType>>(ExceptionTracker&)>;
+
+    LazyFunctionReturnValueMarshaller(const Ref<PlatformValueDelegate<ValueType>>& delegate,
+                                      bool optional,
+                                      ValueSchemaRegistry* registry,
+                                      Resolver resolver)
+        : ValueMarshaller<ValueType>(delegate),
+          _optional(optional),
+          _registry(registry),
+          _resolver(std::move(resolver)) {}
+    ~LazyFunctionReturnValueMarshaller() override = default;
+
+    // Reports the return schema's optionality, captured statically at construction (no forced
+    // resolution), so this wrapper is indistinguishable from the eager return marshaller — which for an
+    // optional return is an OptionalValueMarshaller reporting true. The resolved inner still performs the
+    // actual null handling; this only reports the contract, matching IndirectValueMarshaller and
+    // UnbalancedValueMarshaller.
+    bool isOptional() const final {
+        return _optional;
+    }
+
+    ValueType unmarshall(const Valdi::Value& value,
+                         const ReferenceInfoBuilder& referenceInfoBuilder,
+                         ExceptionTracker& exceptionTracker) final {
+        auto* inner = ensureInner(exceptionTracker);
+        if (inner == nullptr) {
+            return this->handleUnmarshallError(exceptionTracker, "Lazy ValueMarshaller failed to resolve return type");
+        }
+        return inner->unmarshall(value, referenceInfoBuilder, exceptionTracker);
+    }
+
+    Valdi::Value marshall(const ValueType* receiver,
+                          const ValueType& value,
+                          const ReferenceInfoBuilder& referenceInfoBuilder,
+                          ExceptionTracker& exceptionTracker) final {
+        auto* inner = ensureInner(exceptionTracker);
+        if (inner == nullptr) {
+            return this->handleMarshallError(exceptionTracker, "Lazy ValueMarshaller failed to resolve return type");
+        }
+        return inner->marshall(receiver, value, referenceInfoBuilder, exceptionTracker);
+    }
+
+private:
+    // Resolves and caches the inner marshaller on first use. Resolution mutates the shared registry
+    // (getValueMarshaller writes _valueMarshallerBySchemaKey / flushes indirects) and can run on any
+    // thread — a synchronous value return is unmarshalled on the caller's thread, e.g. a Java thread in
+    // the JNI bridge, not necessarily the Valdi JS thread. So it is serialized under the schema
+    // registry's recursive_mutex, the same lock every eager registration path holds; recursive, so a
+    // nested resolve on a thread already holding it is safe. Double-checked: the resolved pointer is
+    // published atomically so steady-state calls take neither the lock nor the branch.
+    ValueMarshaller<ValueType>* ensureInner(ExceptionTracker& exceptionTracker) {
+        if (auto* resolved = _resolvedInner.load(std::memory_order_acquire)) {
+            return resolved;
+        }
+
+        std::unique_lock<std::recursive_mutex> lock;
+        if (_registry != nullptr) {
+            lock = _registry->lock();
+        }
+
+        if (_inner == nullptr && _resolver) {
+            _inner = _resolver(exceptionTracker);
+            // Resolve once: drop the closure (and its captured registry key + schema) whether resolution
+            // succeeded or failed. A failure here would also have failed the eager registration path
+            // deterministically, so we don't re-run it — and its repeated JNI fetches — on every
+            // subsequent call; callers keep getting the same failure without the retry cost.
+            _resolver = nullptr;
+        }
+        _resolvedInner.store(_inner.get(), std::memory_order_release);
+        return _inner.get();
+    }
+
+    bool _optional;
+    ValueSchemaRegistry* _registry;
+    Resolver _resolver;
+    Ref<ValueMarshaller<ValueType>> _inner;
+    // Lock-free fast path once resolved; also the publish point for the double-checked resolution above.
+    std::atomic<ValueMarshaller<ValueType>*> _resolvedInner{nullptr};
 };
 
 /**

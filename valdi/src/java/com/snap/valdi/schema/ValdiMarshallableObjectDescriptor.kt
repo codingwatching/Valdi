@@ -170,16 +170,27 @@ private constructor(val type: Int,
         const val DESCRIPTOR_CLOSURE_FORMAT_VERSION: Int = 2
 
         /**
-         * Type-reference classes of [cls], read from its Valdi annotation. The annotation stores them
-         * as already-resolved [KClass] (not names), so traversal needs no name→Class lookup and is
-         * classloader-safe. Enums and untyped types have none.
+         * A class's Valdi type references paired with the indices into that array that are lazily-
+         * resolved function-return closures. Both are read from the single Valdi annotation, so the
+         * walk does one getAnnotation sweep per class instead of two. References are already-resolved
+         * [KClass] (not names), so traversal is classloader-safe. Enums and untyped types have none.
          */
+        private class ClassReferences(val references: Array<KClass<*>>, val lazyReturnIndices: IntArray)
+
+        private val EMPTY_CLASS_REFERENCES = ClassReferences(emptyArray(), IntArray(0))
+
         @JvmStatic
-        private fun referencedClasses(cls: Class<*>): Array<KClass<*>> {
-            return cls.getAnnotation(ValdiClass::class.java)?.typeReferences
-                ?: cls.getAnnotation(ValdiInterface::class.java)?.typeReferences
-                ?: cls.getAnnotation(ValdiFunctionClass::class.java)?.typeReferences
-                ?: emptyArray()
+        private fun classReferences(cls: Class<*>): ClassReferences {
+            cls.getAnnotation(ValdiClass::class.java)?.let {
+                return ClassReferences(it.typeReferences, it.lazyReturnTypeReferences)
+            }
+            cls.getAnnotation(ValdiInterface::class.java)?.let {
+                return ClassReferences(it.typeReferences, it.lazyReturnTypeReferences)
+            }
+            cls.getAnnotation(ValdiFunctionClass::class.java)?.let {
+                return ClassReferences(it.typeReferences, it.lazyReturnTypeReferences)
+            }
+            return EMPTY_CLASS_REFERENCES
         }
 
         /**
@@ -236,10 +247,17 @@ private constructor(val type: Int,
          *   [u8 version][u32 count] then, per entry:
          *   [u32+className][u8 type][u32+schema][u32+propertyReplacements][u32+proxyClassName]
          *   [u16 refCount]{ [u32+refName] }
+         *
+         * [skipLazyReturnTypeReferences] is passed by the native caller from the single authoritative
+         * lazy-resolution flag (see AndroidValueMarshallerRegistry / lazyFunctionReturnMarshallerFlag),
+         * so there is no separate Kotlin-side toggle to keep in sync. When true, the walk does not recurse
+         * into references reachable only through lazily-resolved function sync-value returns, keeping their
+         * descriptors off the startup critical path (the registry resolves them on demand via its legacy
+         * per-class path); a mismatch only over/under-fetches (self-healing), never breaks correctness.
          */
         @Keep
         @JvmStatic
-        fun getDescriptorClosure(root: Class<*>): ByteBuffer {
+        fun getDescriptorClosure(root: Class<*>, skipLazyReturnTypeReferences: Boolean): ByteBuffer {
             // Reuse the running set directly as `visited`: classes resolved by earlier calls (and their
             // subtrees) are skipped, so the walk only touches the new frontier. Serialized by the C++
             // registry lock (see [resolvedClassNames]).
@@ -280,8 +298,18 @@ private constructor(val type: Int,
                 }
                 count++
 
-                for (ref in referencedClasses(cls)) {
-                    queue.addLast(ref.java)
+                val classRefs = classReferences(cls)
+                val refs = classRefs.references
+                // Skip references reachable only through lazily-resolved function returns: leaving them
+                // unwalked keeps their descriptors out of the buffer, so the registry resolves them on
+                // demand (off the critical path) instead of eagerly here. Packed refNames above still list
+                // them, so an eager reference from any other class re-adds them to the frontier.
+                val lazyRefs = if (skipLazyReturnTypeReferences) classRefs.lazyReturnIndices else IntArray(0)
+                for (i in refs.indices) {
+                    if (i in lazyRefs) {
+                        continue
+                    }
+                    queue.addLast(refs[i].java)
                 }
             }
 

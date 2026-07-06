@@ -217,6 +217,11 @@ void AndroidValueMarshallerRegistry::setDescriptorClosureEnabled(bool enabled) {
     _descriptorClosureEnabled = enabled;
 }
 
+void AndroidValueMarshallerRegistry::setLazyFunctionReturnMarshallerEnabled(bool enabled) {
+    auto lock = _schemaRegistry->lock();
+    _valueMarshallerRegistry.setLazyFunctionReturnMarshallerEnabled(enabled);
+}
+
 Valdi::Ref<Valdi::PlatformObjectClassDelegate<JavaValue>> AndroidValueMarshallerRegistry::getObjectClassDelegateForName(
     const Valdi::StringBox& className) {
     auto result = getOrCreateRegisteredMarshallableClass(className);
@@ -698,9 +703,12 @@ const AndroidValueMarshallerRegistry::ParsedDescriptor* AndroidValueMarshallerRe
         const auto& descriptorJavaClass = ValdiMarshallableObjectDescriptorJavaClass::get();
         // Java tracks which classes it has already packed (its own persistent set) and prunes the walk
         // to the not-yet-resolved frontier, so we don't echo the cache back here. See
-        // ValdiMarshallableObjectDescriptor.resolvedClassNames.
+        // ValdiMarshallableObjectDescriptor.resolvedClassNames. The lazy-resolution flag is the single
+        // source of truth (Valdi::lazyFunctionReturnMarshallerFlag); pass it so the walk skips the
+        // lazily-deferred return references without a second Kotlin-side toggle to keep in sync.
         std::initializer_list<JavaValue> parameters = {
             JavaValue::unsafeMakeObject(javaClass.getClass()),
+            JavaValue::makeBoolean(Valdi::lazyFunctionReturnMarshallerFlag().load(std::memory_order_relaxed) ? 1 : 0),
         };
         auto bufferValue = descriptorJavaClass.getDescriptorClosureMethod.call(
             reinterpret_cast<jobject>(descriptorJavaClass.cls.getClass()), parameters.size(), parameters.begin());

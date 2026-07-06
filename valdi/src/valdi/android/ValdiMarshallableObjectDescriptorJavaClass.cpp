@@ -29,7 +29,7 @@ ValdiMarshallableObjectDescriptorJavaClass ValdiMarshallableObjectDescriptorJava
 
     auto byteBufferType = Valdi::ValueSchema::typeReference(
         Valdi::ValueSchemaTypeReference::named(STRING_LITERAL("java/nio/ByteBuffer")));
-    std::initializer_list<Valdi::ValueSchema> getDescriptorClosureParams = {classType};
+    std::initializer_list<Valdi::ValueSchema> getDescriptorClosureParams = {classType, Valdi::ValueSchema::boolean()};
     out.getDescriptorClosureMethod = out.cls.getStaticMethod("getDescriptorClosure",
                                                              byteBufferType,
                                                              getDescriptorClosureParams.begin(),

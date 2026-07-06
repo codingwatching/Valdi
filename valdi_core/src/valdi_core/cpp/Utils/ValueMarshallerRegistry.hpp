@@ -15,9 +15,23 @@
 #include "valdi_core/cpp/Utils/Trace.hpp"
 #include "valdi_core/cpp/Utils/ValueMarshaller.hpp"
 #include "valdi_core/cpp/Utils/ValueMarshallerFunctionTrampoline.hpp"
+#include <atomic>
 #include <deque>
 
 namespace Valdi {
+
+// Process-wide toggle for lazy resolution of function synchronous-value return marshallers. It must be
+// GLOBAL, not per-registry: createFunctionValueMarshaller runs on every ValueMarshallerRegistry<T>
+// specialization (JavaValue for JNI marshalling, JSValueRef for the JS engine, ...), and a per-instance
+// flag would only ever be set on the one instance the platform setter can reach — leaving the others
+// eager and the registries non-uniform (a mixed lazy/eager registry does not render). One global read
+// by all specializations keeps them uniform. Set once at startup via the COF (see
+// setLazyFunctionReturnMarshallerEnabled); the inline function-local static gives a single instance
+// across translation units.
+inline std::atomic<bool>& lazyFunctionReturnMarshallerFlag() {
+    static std::atomic<bool> flag{false};
+    return flag;
+}
 
 template<typename ValueType>
 struct PendingIndirectValueMarshaller {
@@ -103,6 +117,14 @@ public:
 
     void setListener(ValueMarshallerRegistryListener* listener) {
         _listener = listener;
+    }
+
+    // When enabled, a function's synchronous value return-type marshaller is resolved lazily on first
+    // call instead of at root-create, keeping its type closure off the CCD critical path. Writes the
+    // process-global flag (see lazyFunctionReturnMarshallerFlag) so every registry specialization sees
+    // it. Set once before any marshallable class is registered (see SnapValdiRuntimeManagerFactory.create).
+    void setLazyFunctionReturnMarshallerEnabled(bool enabled) {
+        lazyFunctionReturnMarshallerFlag().store(enabled, std::memory_order_relaxed);
     }
 
 private:
@@ -309,11 +331,56 @@ private:
             return nullptr;
         }
 
-        auto returnMarshaller =
-            getValueMarshallerForSchemaKey(returnKey, functionRef->getReturnValue(), exceptionTracker);
-        if (!exceptionTracker) {
-            exceptionTracker.onError(fmt::format("While processing function return value of {}: ", schema.toString()));
-            return nullptr;
+        // Defer the return-type marshaller resolution (and its full type closure) to the first call that
+        // marshalls a return value, keeping it off the root-create / CCD critical path. For a Provider<X>
+        // field this leaves X's closure unresolved until the tool is actually used. The resolver goes
+        // through the public getValueMarshaller so any indirect marshallers it creates are flushed.
+        //
+        // Scoped to SYNCHRONOUS value returns; promise and worker-dispatched returns are dispatched to a
+        // queue (their marshaller closure runs later, decoupled from this call) and void has no closure
+        // worth deferring, so all three resolve eagerly. The deferred resolution itself mutates the
+        // registry and can be triggered from any thread (a sync value return is unmarshalled on the
+        // caller's thread — e.g. a Java thread in the JNI bridge, not necessarily the JS thread), so the
+        // lazy marshaller serializes its first-call resolution with registration via the schema registry
+        // lock (see LazyFunctionReturnValueMarshaller::ensureInner); we pass the registry down for that.
+        //
+        // ┌─ LAZY_RETURN_DEFERRAL_PREDICATE v1 ─ keep in sync with the compiler ────────────────────────┐
+        // │ "Deferrable" = a synchronous value return: NOT a promise, NOT void, NOT worker-dispatched.   │
+        // │ This predicate is duplicated by the Swift compiler (SchemaWriter.appendFunction), which uses │
+        // │ it to emit lazyReturnTypeReferences so the Android batched-descriptor walk skips exactly the │
+        // │ types deferred here. The two must agree or batch/lazy stop compounding (drift only over/under-│
+        // │ fetches — self-healing, never a correctness bug). If you change the rule, bump the version    │
+        // │ tag in BOTH places and rebuild the prebuilt compiler archive (open_source_archives.bzl).      │
+        // └──────────────────────────────────────────────────────────────────────────────────────────────┘
+        auto returnSchema = functionRef->getReturnValue();
+        const bool deferReturnMarshaller = lazyFunctionReturnMarshallerFlag().load(std::memory_order_relaxed) &&
+                                           !returnSchema.isPromise() && !returnSchema.isVoid() &&
+                                           !functionRef->getAttributes().shouldDispatchToWorkerThread();
+        Ref<ValueMarshaller<ValueType>> returnValueMarshaller;
+        if (deferReturnMarshaller) {
+            returnValueMarshaller = makeShared<LazyFunctionReturnValueMarshaller<ValueType>>(
+                _delegate,
+                returnSchema.isOptional(),
+                _typeResolver.getRegistry(),
+                [this, returnKey, returnSchema](ExceptionTracker& et) -> Ref<ValueMarshaller<ValueType>> {
+                    auto resolved = getValueMarshaller(returnKey, returnSchema, et).valueMarshaller;
+                    if (!et) {
+                        // Runs only on first-call resolution (off the root-create critical path), so the
+                        // schema stringification is not a startup cost; it names the offending return
+                        // type, which the generic marshall-time failure message otherwise omits.
+                        et.onError(
+                            fmt::format("While lazily resolving function return value {}: ", returnSchema.toString()));
+                    }
+                    return resolved;
+                });
+        } else {
+            auto returnMarshaller = getValueMarshallerForSchemaKey(returnKey, returnSchema, exceptionTracker);
+            if (!exceptionTracker) {
+                exceptionTracker.onError(
+                    fmt::format("While processing function return value of {}: ", schema.toString()));
+                return nullptr;
+            }
+            returnValueMarshaller = returnMarshaller.valueMarshaller;
         }
         auto isPromiseReturnType = false;
         auto callFlags = ValueFunctionFlagsNone;
@@ -325,7 +392,7 @@ private:
         }
 
         auto functionTrampoline = ValueMarshallerFunctionTrampoline<ValueType>::make(
-            returnMarshaller.valueMarshaller,
+            returnValueMarshaller,
             functionRef->getParametersSize(),
             callFlags,
             isPromiseReturnType,

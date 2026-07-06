@@ -21,4 +21,11 @@ annotation class ValdiInterface(
          * when a proxy instance needs to be created.
          */
         val proxyClass: KClass<*>,
+        /**
+         * Indices into [typeReferences] whose only use in the schema is as a lazily-resolved function
+         * sync-value return type (mirrors the native lazy function-return marshaller deferral). When
+         * lazy resolution is enabled, the batched descriptor-closure walk skips recursing into these so
+         * their descriptors stay off the startup critical path; the registry resolves them on demand.
+         */
+        val lazyReturnTypeReferences: IntArray = [],
 )

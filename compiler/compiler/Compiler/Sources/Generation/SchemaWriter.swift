@@ -9,6 +9,18 @@ import Foundation
 
 protocol SchemaWriterListener: AnyObject {
     func getClassName(nodeMapping: ValdiNodeClassMapping, typeArguments: [ValdiModelPropertyType]?) throws -> String?
+
+    /// Called around the return type of a function whose sync-value return marshaller is resolved
+    /// lazily at runtime (matches the native `deferReturnMarshaller` rule). Lets a listener record which
+    /// type references are reachable only through a deferred return. Default no-ops: only the Kotlin
+    /// generator (Android batched descriptor walk) needs this.
+    func enterDeferrableReturnType()
+    func exitDeferrableReturnType()
+}
+
+extension SchemaWriterListener {
+    func enterDeferrableReturnType() {}
+    func exitDeferrableReturnType() {}
 }
 
 class SchemaWriter {
@@ -95,7 +107,26 @@ class SchemaWriter {
 
         if !returnType.isVoid {
             str.append(": ")
+            // LAZY_RETURN_DEFERRAL_PREDICATE v1 — keep in sync with the native runtime.
+            // Mirror of ValueMarshallerRegistry::createFunctionValueMarshaller's deferReturnMarshaller: a
+            // sync-value return — not a promise, not dispatched to a worker thread (void is excluded by
+            // the enclosing `if`) — has its marshaller resolved lazily at runtime, so its type-reference
+            // closure is reachable only through the deferred return. The listener uses this to emit
+            // lazyReturnTypeReferences so the Android batched-descriptor walk skips exactly those types.
+            // If you change this rule, bump the version tag in BOTH places (see that C++ site) and rebuild
+            // the prebuilt compiler archive; drift only over/under-fetches (self-healing), never miscompiles.
+            var isPromiseReturn = false
+            if case .promise = returnType.unwrappingOptional {
+                isPromiseReturn = true
+            }
+            let deferrableReturn = !isPromiseReturn && !shouldCallOnWorkerThread
+            if deferrableReturn {
+                listener.enterDeferrableReturnType()
+            }
             try appendType(returnType, asBoxed: shouldBoxParametersAndReturnValue, isMethod: false, asyncStrictMode: asyncStrictMode)
+            if deferrableReturn {
+                listener.exitDeferrableReturnType()
+            }
         }
     }
 

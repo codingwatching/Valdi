@@ -87,6 +87,10 @@ class KotlinFunctionTypeParser {
 private class KotlinSchemaWriterListener: SchemaWriterListener {
     private unowned let codeGenerator: KotlinCodeGenerator
     private let emittedTypeReferences: KotlinEmittedTypeReferences
+    // Nesting depth of deferrable-return positions currently being written (a return type can itself be
+    // a function with a deferrable return). > 0 means the reference being emitted is reachable only via
+    // a lazily-resolved return.
+    private var deferrableReturnDepth = 0
 
     init(codeGenerator: KotlinCodeGenerator, emittedTypeReferences: KotlinEmittedTypeReferences) {
         self.codeGenerator = codeGenerator
@@ -101,8 +105,49 @@ private class KotlinSchemaWriterListener: SchemaWriterListener {
         let jvmClass = try codeGenerator.importClass(androidClassName)
 
         let identifierIndex = emittedTypeReferences.getIdentifierIndex(jvmClass.name)
+        emittedTypeReferences.recordUsage(index: identifierIndex, inDeferrableReturnType: deferrableReturnDepth > 0)
 
         return "[\(identifierIndex)]"
+    }
+
+    func enterDeferrableReturnType() {
+        deferrableReturnDepth += 1
+    }
+
+    func exitDeferrableReturnType() {
+        deferrableReturnDepth -= 1
+    }
+
+}
+
+/// Renders a Kotlin annotation (`@Name(a = v1, b = v2)`) lazily at code-render time. Params whose value
+/// renders to an empty string are dropped, so a defaulted/absent optional argument is simply omitted
+/// rather than emitted as a redundant empty value.
+class KotlinAnnotationContent: CodeWriterContent {
+
+    private let name: String
+    private let parameters: [(String, CodeWriterContent)]
+
+    init(name: String, parameters: [(String, CodeWriterContent)]) {
+        self.name = name
+        self.parameters = parameters
+    }
+
+    var content: String {
+        let rendered = parameters.compactMap { (paramName, paramContent) -> (String, String)? in
+            let value = paramContent.content
+            return value.isEmpty ? nil : (paramName, value)
+        }
+
+        var out = "@\(name)"
+        if rendered.count == 1 {
+            out += "(\(rendered[0].0) = \(rendered[0].1))"
+        } else if rendered.count > 1 {
+            out += "("
+            out += rendered.map { "\n    \($0.0) = \($0.1)" }.joined(separator: ",")
+            out += "\n)"
+        }
+        return out
     }
 
 }
@@ -158,16 +203,22 @@ class KotlinMarshallableObjectDescriptorAnnotation: CodeWriter {
         var allParameters = [(String, CodeWriterContent)]()
         allParameters.append(("schema", schema))
 
+        // Emitted lazily (rendered empty → param omitted) after the schema is written; see
+        // KotlinLazyReturnTypeReferences. Only classes carrying typeReferences can have lazy returns.
+        let lazyReturnTypeReferences = KotlinLazyReturnTypeReferences(emittedTypeReferences)
+
         let annotationName: String
         switch type {
         case .valdiClass:
             annotationName = "ValdiClass"
             allParameters.append(("typeReferences", emittedTypeReferences))
             allParameters.append(("propertyReplacements", propertyReplacements))
+            allParameters.append(("lazyReturnTypeReferences", lazyReturnTypeReferences))
         case .valdiInterface:
             annotationName = "ValdiInterface"
             allParameters.append(("typeReferences", emittedTypeReferences))
             allParameters.append(("propertyReplacements", propertyReplacements))
+            allParameters.append(("lazyReturnTypeReferences", lazyReturnTypeReferences))
         case .stringEnum:
             annotationName = "ValdiEnum"
             allParameters.append(("propertyReplacements", propertyReplacements))
@@ -178,6 +229,7 @@ class KotlinMarshallableObjectDescriptorAnnotation: CodeWriter {
             annotationName = "ValdiFunctionClass"
             allParameters.append(("typeReferences", emittedTypeReferences))
             allParameters.append(("propertyReplacements", propertyReplacements))
+            allParameters.append(("lazyReturnTypeReferences", lazyReturnTypeReferences))
         }
         allParameters.append(contentsOf: additionalParameters)
 
@@ -283,28 +335,10 @@ final class KotlinCodeGenerator: CodeWriter {
         let annotationClassType = try importClass(annotationType)
 
         let output = CodeWriter()
-        output.appendBody("@\(annotationClassType.name)")
-
-        if !parameters.isEmpty {
-            output.appendBody("(")
-            if parameters.count  == 1 {
-                output.appendBody("\(parameters[0].0) = ")
-                output.appendBody(parameters[0].1)
-            } else {
-                var first = true
-                for parameter in parameters {
-                    if !first {
-                        output.appendBody(",")
-                    }
-                    first = false
-                    output.appendBody("\n    \(parameter.0) = ")
-                    output.appendBody(parameter.1)
-                }
-                output.appendBody("\n" )
-            }
-            output.appendBody(")")
-        }
-
+        // Render lazily (after the schema is written) so params whose value is only known then are
+        // included, and drop params that render empty so an unused optional (e.g. no lazy return
+        // references) doesn't emit a redundant argument.
+        output.appendBody(KotlinAnnotationContent(name: annotationClassType.name, parameters: parameters))
         output.appendBody("\n")
 
         return output
