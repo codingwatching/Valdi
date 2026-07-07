@@ -109,7 +109,7 @@ BENCHMARK(EncodeProtobufReflectionCpp);
 
 static void DecodeValdiProtobuf(benchmark::State& state) {
     auto protoData = makeProtoData();
-    const auto& descriptor = *test::Message::GetDescriptor();
+    const auto* descriptor = test::Message::GetDescriptor();
 
     for (auto _ : state) {
         auto message = Protobuf::Message::parse(protoData, descriptor);
@@ -124,7 +124,7 @@ static void DecodeValdiProtobufNoPostprocess(benchmark::State& state) {
     auto protoData = makeProtoData();
 
     for (auto _ : state) {
-        auto message = Protobuf::Message::parse(protoData);
+        auto message = Protobuf::Message::parse(protoData, nullptr);
         if (!message) {
             SC_ABORT("Message failed to parse");
         }
@@ -134,7 +134,7 @@ BENCHMARK(DecodeValdiProtobufNoPostprocess);
 
 static void EncodeValdiProtobuf(benchmark::State& state) {
     auto protoData = makeProtoData();
-    const auto& descriptor = *test::Message::GetDescriptor();
+    const auto* descriptor = test::Message::GetDescriptor();
     auto result = Protobuf::Message::parse(protoData, descriptor);
     if (!result) {
         SC_ABORT("Message failed to parse");
@@ -142,10 +142,7 @@ static void EncodeValdiProtobuf(benchmark::State& state) {
     auto message = result.moveValue();
 
     for (auto _ : state) {
-        auto result = message->encode();
-        if (!result) {
-            SC_ABORT("Message failed to serialize");
-        }
+        benchmark::DoNotOptimize(message->encode());
     }
 }
 BENCHMARK(EncodeValdiProtobuf);
