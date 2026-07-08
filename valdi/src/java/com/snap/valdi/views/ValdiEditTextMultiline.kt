@@ -8,6 +8,8 @@ import androidx.annotation.Keep
 @Keep
 class ValdiEditTextMultiline(context: Context) : ValdiEditText(context) {
 
+    override val isValdiSingleLine: Boolean get() = false
+
     init {
         allowLineReturns(true)
         closesWhenReturnKeyPressedDefault = false
