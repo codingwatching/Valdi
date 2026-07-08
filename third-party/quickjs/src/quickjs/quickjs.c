@@ -40147,12 +40147,356 @@ static BOOL test_final_sigma(JSString* p, int sigma_pos) {
     return !lre_is_cased(c1);
 }
 
+/* Canonical Combining Class = 230 (Above) predicate.
+
+   Unicode SpecialCasing.txt context conditions (More_Above, After_I,
+   After_Soft_Dotted, Not_Before_Dot) reference "combining class 230".
+   Table hand-built from Unicode 15.0 UnicodeData.txt column 3 for
+   scripts likely to be case-relevant: Latin combining marks, Greek,
+   Cyrillic, Hebrew, Arabic. Broader coverage (Indic, Ethiopic,
+   supplementary plane) is not included — those scripts do not mix
+   with cased Latin/Greek/Cyrillic in practice. */
+static BOOL lre_is_ccc_above(uint32_t c) {
+    if (c < 0x0300)
+        return FALSE;
+    /* Combining Diacritical Marks (Latin, Greek, etc.) */
+    if (c <= 0x0314) return TRUE;
+    if (c >= 0x033D && c <= 0x0344) return TRUE;
+    if (c == 0x0346) return TRUE;
+    if (c >= 0x034A && c <= 0x034C) return TRUE;
+    if (c >= 0x0350 && c <= 0x0352) return TRUE;
+    if (c == 0x0357) return TRUE;
+    if (c == 0x035B) return TRUE;
+    if (c >= 0x0363 && c <= 0x036F) return TRUE;
+    /* Cyrillic combining */
+    if (c >= 0x0483 && c <= 0x0487) return TRUE;
+    /* Hebrew accents/points */
+    if (c >= 0x0592 && c <= 0x0595) return TRUE;
+    if (c >= 0x0597 && c <= 0x0599) return TRUE;
+    if (c >= 0x059C && c <= 0x05A1) return TRUE;
+    if (c >= 0x05A8 && c <= 0x05A9) return TRUE;
+    if (c >= 0x05AB && c <= 0x05AC) return TRUE;
+    if (c == 0x05AF) return TRUE;
+    if (c == 0x05C4) return TRUE;
+    /* Arabic marks */
+    if (c >= 0x0610 && c <= 0x0617) return TRUE;
+    if (c == 0x0653) return TRUE;
+    if (c == 0x0655) return TRUE;
+    if (c >= 0x0657 && c <= 0x0658) return TRUE;
+    if (c == 0x065D) return TRUE;
+    if (c == 0x065E) return TRUE;
+    if (c >= 0x06D6 && c <= 0x06DC) return TRUE;
+    if (c >= 0x06DF && c <= 0x06E4) return TRUE;
+    if (c >= 0x06E7 && c <= 0x06E8) return TRUE;
+    if (c >= 0x06EB && c <= 0x06EC) return TRUE;
+    return FALSE;
+}
+
+/* Soft_Dotted property predicate.
+
+   Practical subset from Unicode 15.0 DerivedCoreProperties.txt covering
+   Latin/IPA/Cyrillic/Greek. Supplementary plane math italic i/j
+   variants (U+1D422 range) are not included. */
+static BOOL lre_is_soft_dotted(uint32_t c) {
+    switch (c) {
+        case 0x0069: case 0x006A: case 0x012F: case 0x0249:
+        case 0x0268: case 0x029D: case 0x02B2: case 0x03F3:
+        case 0x0456: case 0x0458: case 0x1D62: case 0x1D96:
+        case 0x1DA4: case 0x1DA8: case 0x1E2D: case 0x1ECB:
+        case 0x2071: case 0x2148: case 0x2149: case 0x2C7C:
+            return TRUE;
+        default:
+            return FALSE;
+    }
+}
+
+/* SpecialCasing.txt "More_Above" context.
+
+   C is followed by a character of combining class 230 (Above) with no
+   intervening character of combining class 0 or 230 (Above). */
+static BOOL test_more_above(JSString* p, int pos) {
+    int k, c1;
+    k = pos + 1;
+    for (;;) {
+        if (k >= p->len)
+            return FALSE;
+        c1 = string_getc(p, &k);
+        if (lre_is_ccc_above(c1))
+            return TRUE;
+        /* ccc=0 (base char) or ccc=230 (already handled): stop. */
+        if (!lre_is_case_ignorable(c1))
+            return FALSE;
+    }
+}
+
+/* SpecialCasing.txt "After_Soft_Dotted" context.
+
+   There is a Soft_Dotted character before C, with no intervening
+   character of combining class 0 or 230 (Above). */
+static BOOL test_after_soft_dotted(JSString* p, int pos) {
+    int k, c1;
+    k = pos;
+    while (k > 0) {
+        c1 = string_prevc(p, &k);
+        if (lre_is_soft_dotted(c1))
+            return TRUE;
+        if (lre_is_ccc_above(c1))
+            return FALSE;
+        if (!lre_is_case_ignorable(c1))
+            return FALSE;
+    }
+    return FALSE;
+}
+
+/* SpecialCasing.txt "After_I" context.
+
+   There is an uppercase I (U+0049) before C, and there is no
+   intervening combining character of class 230 (Above) or 0. */
+static BOOL test_after_i(JSString* p, int pos) {
+    int k, c1;
+    k = pos;
+    while (k > 0) {
+        c1 = string_prevc(p, &k);
+        if (c1 == 0x0049)
+            return TRUE;
+        if (lre_is_ccc_above(c1))
+            return FALSE;
+        if (!lre_is_case_ignorable(c1))
+            return FALSE;
+    }
+    return FALSE;
+}
+
+/* SpecialCasing.txt "Before_Dot" (used as !Not_Before_Dot).
+
+   C is followed by combining dot above (U+0307). Any sequence of
+   characters with a combining class that is neither 0 nor 230 may
+   intervene between the current character and the combining dot
+   above. */
+static BOOL test_before_dot(JSString* p, int pos) {
+    int k, c1;
+    k = pos + 1;
+    for (;;) {
+        if (k >= p->len)
+            return FALSE;
+        c1 = string_getc(p, &k);
+        if (c1 == 0x0307)
+            return TRUE;
+        if (lre_is_ccc_above(c1))
+            return FALSE;
+        if (!lre_is_case_ignorable(c1))
+            return FALSE;
+    }
+}
+
+/* Match a BCP-47 primary language subtag. Returns TRUE if the tag
+   begins with c0_target/c1_target (ASCII case-insensitive) followed
+   by either the end of the string or a subtag delimiter ('-' per
+   BCP-47, '_' tolerated for POSIX-style tags). */
+static BOOL js_case_tag_matches(const char *s, size_t len,
+                                char c0_target, char c1_target) {
+    char c0, c1;
+    if (len < 2)
+        return FALSE;
+    c0 = s[0] | 0x20;
+    c1 = s[1] | 0x20;
+    if (c0 != c0_target || c1 != c1_target)
+        return FALSE;
+    return len == 2 || s[2] == '-' || s[2] == '_';
+}
+
+typedef enum {
+    JS_CASE_LOCALE_ROOT = 0,
+    JS_CASE_LOCALE_TURKIC = 1,     /* tr, az */
+    JS_CASE_LOCALE_LITHUANIAN = 2, /* lt */
+} JSCaseLocale;
+
+static JSCaseLocale js_classify_case_tag(const char *s, size_t len) {
+    if (js_case_tag_matches(s, len, 't', 'r') ||
+        js_case_tag_matches(s, len, 'a', 'z'))
+        return JS_CASE_LOCALE_TURKIC;
+    if (js_case_tag_matches(s, len, 'l', 't'))
+        return JS_CASE_LOCALE_LITHUANIAN;
+    return JS_CASE_LOCALE_ROOT;
+}
+
+/* Coerce a JS value to a C string, classify, free. */
+static JSCaseLocale js_classify_case_value(JSContext *ctx, JSValueConst v) {
+    const char *s;
+    size_t slen;
+    JSCaseLocale result = JS_CASE_LOCALE_ROOT;
+    s = JS_ToCStringLen(ctx, &slen, v);
+    if (s) {
+        result = js_classify_case_tag(s, slen);
+        JS_FreeCString(ctx, s);
+    } else {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+    }
+    return result;
+}
+
+/* Inspect the `locales` argument to toLocale{Upper,Lower}Case and
+   classify the resolved locale. Follows ECMA-402 CanonicalizeLocaleList
+   / TransformCase: only the first supported locale in the list is
+   used. Accepts:
+     - undefined/null → ROOT
+     - String        → treated as [locales]
+     - Any object    → ToObject, read .length, iterate 0..length using
+                       HasProperty so sparse holes and array-like
+                       objects work (e.g. [, 'tr'] resolves to Turkic).
+   Any coercion error is swallowed and treated as ROOT. */
+static JSCaseLocale js_locale_arg_classify(JSContext *ctx, int argc,
+                                           JSValueConst *argv) {
+    JSValueConst arg;
+    JSValue item;
+    int64_t len, k;
+    JSCaseLocale result;
+
+    if (argc < 1)
+        return JS_CASE_LOCALE_ROOT;
+    arg = argv[0];
+    if (JS_IsUndefined(arg) || JS_IsNull(arg))
+        return JS_CASE_LOCALE_ROOT;
+
+    /* Bare string: use as the sole requested locale. */
+    if (JS_VALUE_GET_TAG(arg) == JS_TAG_STRING)
+        return js_classify_case_value(ctx, arg);
+
+    /* Non-object primitives (numbers, booleans): coerce to string
+       and classify — spec would ToObject-wrap them, iterate, and get
+       the same result since their .length is a non-object primitive. */
+    if (JS_VALUE_GET_TAG(arg) != JS_TAG_OBJECT)
+        return js_classify_case_value(ctx, arg);
+
+    /* Array-like: read length, iterate skipping holes. */
+    if (js_get_length64(ctx, &len, arg)) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        return JS_CASE_LOCALE_ROOT;
+    }
+    for (k = 0; k < len; k++) {
+        int present;
+        JSAtom kAtom = JS_NewAtomUInt32(ctx, (uint32_t)k);
+        present = JS_HasProperty(ctx, arg, kAtom);
+        JS_FreeAtom(ctx, kAtom);
+        if (present < 0) {
+            JS_FreeValue(ctx, JS_GetException(ctx));
+            return JS_CASE_LOCALE_ROOT;
+        }
+        if (!present)
+            continue; /* sparse hole */
+        item = JS_GetPropertyUint32(ctx, arg, (uint32_t)k);
+        if (JS_IsException(item)) {
+            JS_FreeValue(ctx, JS_GetException(ctx));
+            return JS_CASE_LOCALE_ROOT;
+        }
+        if (JS_IsUndefined(item) || JS_IsNull(item)) {
+            JS_FreeValue(ctx, item);
+            continue;
+        }
+        result = js_classify_case_value(ctx, item);
+        JS_FreeValue(ctx, item);
+        return result;
+    }
+    return JS_CASE_LOCALE_ROOT;
+}
+
+/* Magic bits for js_string_toLowerCase:
+     bit 0: 0 = uppercase, 1 = lowercase
+     bit 1: 0 = non-locale (toUpperCase/toLowerCase),
+            1 = locale form (toLocaleUpperCase/toLocaleLowerCase).
+   Only the locale forms consult argv[0]; extra args to the
+   non-locale forms are ignored per spec. */
+#define JS_TO_CASE_LOWER  1
+#define JS_TO_CASE_LOCALE 2
+
+/* Sentinel from apply_special_casing meaning "emit nothing for this
+   code point" (used for the After_I dot-above absorption rule). */
+#define JS_CASE_ABSORB (-1)
+
+/* Apply Unicode SpecialCasing.txt locale-conditional and context-
+   conditional rules that lre_case_conv does not know about. Returns:
+     >0  number of code points written to `res` — caller emits them
+     0   no override; caller falls back to lre_case_conv
+     JS_CASE_ABSORB  emit nothing (character absorbed) */
+static int apply_special_casing(uint32_t *res, JSString *p, int char_pos,
+                                uint32_t c, int to_lower,
+                                JSCaseLocale locale) {
+    switch (locale) {
+    case JS_CASE_LOCALE_TURKIC:
+        if (!to_lower) {
+            if (c == 0x0069) { /* i -> İ */
+                res[0] = 0x0130;
+                return 1;
+            }
+        } else {
+            if (c == 0x0130) { /* İ -> i */
+                res[0] = 0x0069;
+                return 1;
+            }
+            if (c == 0x0307 && test_after_i(p, char_pos)) {
+                /* Combining dot above after I is absorbed. */
+                return JS_CASE_ABSORB;
+            }
+            if (c == 0x0049 && !test_before_dot(p, char_pos)) {
+                res[0] = 0x0131; /* I -> ı */
+                return 1;
+            }
+        }
+        break;
+
+    case JS_CASE_LOCALE_LITHUANIAN:
+        if (to_lower) {
+            if (c == 0x0049 && test_more_above(p, char_pos)) {
+                res[0] = 0x0069;
+                res[1] = 0x0307;
+                return 2;
+            }
+            if (c == 0x004A && test_more_above(p, char_pos)) {
+                res[0] = 0x006A;
+                res[1] = 0x0307;
+                return 2;
+            }
+            if (c == 0x012E && test_more_above(p, char_pos)) {
+                res[0] = 0x012F;
+                res[1] = 0x0307;
+                return 2;
+            }
+            if (c == 0x00CC) {
+                res[0] = 0x0069;
+                res[1] = 0x0307;
+                res[2] = 0x0300;
+                return 3;
+            }
+            if (c == 0x00CD) {
+                res[0] = 0x0069;
+                res[1] = 0x0307;
+                res[2] = 0x0301;
+                return 3;
+            }
+            if (c == 0x0128) {
+                res[0] = 0x0069;
+                res[1] = 0x0307;
+                res[2] = 0x0303;
+                return 3;
+            }
+        }
+        break;
+
+    case JS_CASE_LOCALE_ROOT:
+        break;
+    }
+    return 0;
+}
+
 static JSValue js_string_toLowerCase(
-    JSContext* ctx, JSValueConst this_val, int argc, JSValueConst* argv, int to_lower) {
+    JSContext* ctx, JSValueConst this_val, int argc, JSValueConst* argv, int magic) {
     JSValue val;
     StringBuffer b_s, *b = &b_s;
     JSString* p;
-    int i, c, j, l;
+    int i, c, j, l, char_pos;
+    int to_lower = magic & JS_TO_CASE_LOWER;
+    BOOL is_locale = (magic & JS_TO_CASE_LOCALE) != 0;
+    JSCaseLocale locale;
     uint32_t res[LRE_CC_RES_LEN_MAX];
 
     val = JS_ToStringCheckObject(ctx, this_val);
@@ -40163,13 +40507,21 @@ static JSValue js_string_toLowerCase(
         return val;
     if (string_buffer_init(ctx, b, p->len))
         goto fail;
+    locale = is_locale ? js_locale_arg_classify(ctx, argc, argv)
+                       : JS_CASE_LOCALE_ROOT;
     for (i = 0; i < p->len;) {
+        char_pos = i;
         c = string_getc(p, &i);
-        if (c == 0x3a3 && to_lower && test_final_sigma(p, i - 1)) {
-            res[0] = 0x3c2; /* final sigma */
+        /* Final_Sigma is locale-independent per SpecialCasing.txt. */
+        if (to_lower && c == 0x03A3 && test_final_sigma(p, char_pos)) {
+            res[0] = 0x03C2;
             l = 1;
         } else {
-            l = lre_case_conv(res, c, to_lower);
+            l = apply_special_casing(res, p, char_pos, c, to_lower, locale);
+            if (l == 0)
+                l = lre_case_conv(res, c, to_lower);
+            else if (l == JS_CASE_ABSORB)
+                continue;
         }
         for (j = 0; j < l; j++) {
             if (string_buffer_putc(b, res[j]))
@@ -40576,10 +40928,11 @@ static const JSCFunctionListEntry js_string_proto_funcs[] = {
     JS_CFUNC_DEF("valueOf", 0, js_string_toString),
     JS_CFUNC_DEF("__quote", 1, js_string___quote),
     JS_CFUNC_DEF("localeCompare", 1, js_string_localeCompare),
-    JS_CFUNC_MAGIC_DEF("toLowerCase", 0, js_string_toLowerCase, 1),
+    JS_CFUNC_MAGIC_DEF("toLowerCase", 0, js_string_toLowerCase, JS_TO_CASE_LOWER),
     JS_CFUNC_MAGIC_DEF("toUpperCase", 0, js_string_toLowerCase, 0),
-    JS_CFUNC_MAGIC_DEF("toLocaleLowerCase", 0, js_string_toLowerCase, 1),
-    JS_CFUNC_MAGIC_DEF("toLocaleUpperCase", 0, js_string_toLowerCase, 0),
+    JS_CFUNC_MAGIC_DEF("toLocaleLowerCase", 0, js_string_toLowerCase,
+                       JS_TO_CASE_LOWER | JS_TO_CASE_LOCALE),
+    JS_CFUNC_MAGIC_DEF("toLocaleUpperCase", 0, js_string_toLowerCase, JS_TO_CASE_LOCALE),
     JS_CFUNC_MAGIC_DEF("[Symbol.iterator]", 0, js_create_array_iterator, JS_ITERATOR_KIND_VALUE | 4),
     /* ES6 Annex B 2.3.2 etc. */
     JS_CFUNC_MAGIC_DEF("anchor", 1, js_string_CreateHTML, magic_string_anchor),
