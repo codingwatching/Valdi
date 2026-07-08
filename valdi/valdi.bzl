@@ -12,6 +12,7 @@ COMPILER_FLAGS = [
     "-Wno-gnu-statement-expression",
     "-Wno-implicit-function-declaration",
     "-Wno-keyword-macro",
+    "-Wno-nontrivial-memcall",
     "-Wno-pedantic",
     "-Wno-vla-extension",
     "-Wno-zero-length-array",
