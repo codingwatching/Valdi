@@ -2258,7 +2258,7 @@ def _invoke_valdi_hotreloader(ctx):
     toolchain = ctx.toolchains[VALDI_TOOLCHAIN_TYPE].info
 
     config_yaml_file = generate_config(ctx)
-    (executable, tools, input_manifests) = resolve_compiler_executable(ctx, toolchain, include_tools = True)
+    (executable, tool_inputs, tools) = resolve_compiler_executable(ctx, toolchain, include_tools = True)
 
     all_targets = depset(direct = ctx.attr.targets, transitive = [target[ValdiModuleInfo].deps for target in ctx.attr.targets]).to_list()
 
@@ -2280,10 +2280,9 @@ echo '{executable} {args}' >> {script_path}
 
     ctx.actions.run_shell(
         outputs = [run_hotreloader],
-        inputs = [executable, config_yaml_file, explicit_input_list_file],
+        inputs = depset(direct = [executable, config_yaml_file, explicit_input_list_file], transitive = [tool_inputs]),
         tools = tools,
         command = cmd,
-        input_manifests = input_manifests,
         arguments = [],
         env = {},
         toolchain = VALDI_TOOLCHAIN_TYPE,

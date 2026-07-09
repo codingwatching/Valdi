@@ -721,6 +721,9 @@ objc_library(
 macos_unit_test(
     name = "valdi_macos_objc_test",
     minimum_os_version = "10.15",
+    # Default runner drives xcodebuild, which needs testmanagerd (a GUI session
+    # service). CI runs headless, so use the xctest-agent runner instead.
+    runner = "//bzl/testing:macos_xctest_agent_runner",
     deps = [":macos_unit_tests_lib"],
 )
 

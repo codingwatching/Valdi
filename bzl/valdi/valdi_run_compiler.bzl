@@ -47,31 +47,25 @@ def resolve_compiler_executable(ctx, toolchain, include_tools):
         toolchain: The toolchain info for the current rule invocation
 
     Returns:
-        A tuple of (executable: File, tools: depset, input_manifests: List[RunfilesManifest])
+        A tuple of (executable: File, inputs: depset, tools: list[FilesToRunProvider])
     """
 
     inputs_depsets = []
     inputs_depsets.append(toolchain.compiler.files)
-
     inputs_depsets.append(toolchain.companion.files)
-    companion = toolchain.companion
-    (companion_inputs, companion_runfile_manifests) = ctx.resolve_tools(tools = [companion])
-    inputs_depsets.append(companion_inputs)
 
-    manifests = []
-    manifests += companion_runfile_manifests
+    # Bazel 8 removed ctx.resolve_tools. Passing each tool's FilesToRunProvider
+    # to ctx.actions.run(tools = ...) makes Bazel resolve its runfiles (and the
+    # input manifests that ctx.resolve_tools used to return) automatically.
+    tools = [toolchain.companion[DefaultInfo].files_to_run]
     if include_tools:
         inputs_depsets.append(toolchain.compiler_toolbox.files)
         inputs_depsets.append(toolchain.minify_config.files)
         inputs_depsets.append(toolchain.sqldelight_compiler.files)
 
-        sqldelight_compiler = toolchain.sqldelight_compiler
-        (sqldelight_compiler_inputs, sqldelight_compiler_runfile_manifests) = ctx.resolve_tools(tools = [sqldelight_compiler])
-        inputs_depsets.append(sqldelight_compiler_inputs)
+        tools.append(toolchain.sqldelight_compiler[DefaultInfo].files_to_run)
 
-        manifests += sqldelight_compiler_runfile_manifests
-
-    return (toolchain.compiler.files.to_list()[0], depset(transitive = inputs_depsets), manifests)
+    return (toolchain.compiler.files.to_list()[0], depset(transitive = inputs_depsets), tools)
 
 def run_valdi_compiler(ctx, args, outputs, inputs, mnemonic, progress_message, use_worker, include_tools = True, worker_protocol = "proto"):
     """ Run the Valdi compiler with the provided arguments.
@@ -79,7 +73,7 @@ def run_valdi_compiler(ctx, args, outputs, inputs, mnemonic, progress_message, u
     and emits outputs.
     """
     toolchain = ctx.toolchains[VALDI_TOOLCHAIN_TYPE].info
-    (executable, tools, input_manifests) = resolve_compiler_executable(ctx, toolchain, include_tools)
+    (executable, tool_inputs, tools) = resolve_compiler_executable(ctx, toolchain, include_tools)
 
     companion_bin_wrapper = toolchain.companion.files.to_list()[0]
     compiler_toolbox = toolchain.compiler_toolbox.files.to_list()[0]
@@ -111,10 +105,9 @@ def run_valdi_compiler(ctx, args, outputs, inputs, mnemonic, progress_message, u
 
     ctx.actions.run(
         outputs = outputs,
-        inputs = inputs,
+        inputs = depset(direct = inputs, transitive = [tool_inputs]),
         executable = executable,
         tools = tools,
-        input_manifests = input_manifests,
         arguments = action_arguments,
         env = env,
         use_default_shell_env = True,

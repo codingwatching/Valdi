@@ -1,4 +1,4 @@
-load("@valdi//bzl:prebuilt_tools.bzl", "jscore_library")
+load("@valdi//bzl:prebuilt_tools.bzl", "jscore_import")
 
 cc_library(
     name = "jscore",
@@ -21,11 +21,4 @@ objc_library(
     ],
 )
 
-cc_import(
-    name = "jscore_library",
-    shared_library = select({
-        "//bzl/conditions:linux_x64": jscore_library(),
-        "//conditions:default": None,
-    }),
-    visibility = ["//visibility:public"],
-)
+jscore_import(name = "jscore_library")

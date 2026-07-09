@@ -1,0 +1,9 @@
+load("//bzl/testing:macos_xctest_agent_runner.bzl", "macos_xctest_agent_runner")
+
+exports_files(["macos_xctest_agent_runner.template.sh"])
+
+# Headless-safe macOS unit test runner (xctest agent, no testmanagerd).
+macos_xctest_agent_runner(
+    name = "macos_xctest_agent_runner",
+    visibility = ["//visibility:public"],
+)
