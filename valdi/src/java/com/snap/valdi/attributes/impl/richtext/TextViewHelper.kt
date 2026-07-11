@@ -812,7 +812,7 @@ class TextViewHelper(private val view: TextView,
         val availableWidth = (view.width - view.compoundPaddingLeft - view.compoundPaddingRight).toFloat()
         if (availableWidth <= 0f) return
         val textPaint = TextPaint(view.paint)
-        val text: CharSequence = view.text ?: ""
+        val text = textForAutofit()
         textPaint.textSize = maxPx
         if (Layout.getDesiredWidth(text, textPaint) <= availableWidth) {
             view.setTextSize(TypedValue.COMPLEX_UNIT_PX, maxPx)
@@ -828,6 +828,14 @@ class TextViewHelper(private val view: TextView,
         // Preserve 1-px-step granularity of the original linear scan to avoid snapshot drift.
         val snapped = maxOf(maxPx - kotlin.math.ceil((maxPx - lo).toDouble()).toFloat(), minPx)
         view.setTextSize(TypedValue.COMPLEX_UNIT_PX, snapped)
+    }
+
+    private fun textForAutofit(): CharSequence {
+        val text = view.text ?: ""
+        if (view is ValdiEditText && text.isEmpty()) {
+            return view.hint ?: ""
+        }
+        return text
     }
 
     override fun onFontMissing(fontDescriptor: FontDescriptor) {
