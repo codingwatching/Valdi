@@ -1,0 +1,30 @@
+name: 'Pin Xcode'
+description: >-
+  Activate a specific Xcode on macos-* runners. The default runner image
+  activates whatever Xcode is currently symlinked, which rolls forward
+  independently and can surface new Clang diagnostics (e.g.
+  -Wnontrivial-memcall on Xcode 26.5) at unpredictable times. Pinning
+  keeps Clang stable across CI runs.
+
+inputs:
+  version:
+    description: 'Xcode version segment (matches /Applications/Xcode_<version>.app).'
+    required: false
+    default: '26.0.1'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Pin Xcode
+      shell: bash
+      env:
+        XCODE_VERSION: ${{ inputs.version }}
+      run: |
+        XCODE_APP="/Applications/Xcode_${XCODE_VERSION}.app"
+        if [[ ! -d "$XCODE_APP" ]]; then
+          echo "::error::$XCODE_APP not preinstalled on runner. Bump this pin or investigate runner image changes."
+          ls -1 /Applications | grep -i '^Xcode' || true
+          exit 1
+        fi
+        sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+        xcodebuild -version

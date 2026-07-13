@@ -78,6 +78,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Pin Xcode
+        uses: ./.github/actions/pin-xcode
+
       - name: Configure Bazel cache
         uses: ./.github/actions/bazel-cache
         with:
@@ -209,6 +212,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Pin Xcode
+        uses: ./.github/actions/pin-xcode
 
       - name: Configure Bazel cache
         uses: ./.github/actions/bazel-cache
