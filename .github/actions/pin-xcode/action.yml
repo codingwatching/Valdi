@@ -10,7 +10,7 @@ inputs:
   version:
     description: 'Xcode version segment (matches /Applications/Xcode_<version>.app).'
     required: false
-    default: '26.0.1'
+    default: '26.5.0'
 
 runs:
   using: 'composite'
