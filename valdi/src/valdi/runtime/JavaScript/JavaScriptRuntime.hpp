@@ -423,6 +423,7 @@ private:
     std::vector<RegisteredTypeConverter> _typeConverters;
     std::vector<Ref<JavaScriptStacktraceCaptureSession>> _stacktraceCaptureSessions;
     std::vector<Weak<JavaScriptRuntime>> _jsWorkers;
+    Mutex _jsWorkersMutex;
 
     Shared<JSValueRefHolder> _uncaughtExceptionHandler;
     Shared<JSValueRefHolder> _unhandledRejectionHandler;

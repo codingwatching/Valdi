@@ -2237,7 +2237,10 @@ JSValueRef JavaScriptRuntime::runtimeCreateWorker(JSFunctionNativeCallContext& c
                         "terminate",
                         &JavaScriptRuntime::workerTerminate);
     CHECK_CALL_CONTEXT(callContext);
-    _jsWorkers.emplace_back(weakRef(workerRuntime.get()));
+    {
+        std::lock_guard<Mutex> guard(_jsWorkersMutex);
+        _jsWorkers.emplace_back(weakRef(workerRuntime.get()));
+    }
     return workerJSValue;
 }
 
@@ -2537,6 +2540,7 @@ void JavaScriptRuntime::requestUpdateJsContextHandler(JavaScriptEntryParameters&
 }
 
 std::vector<Ref<JavaScriptRuntime>> JavaScriptRuntime::getAllWorkers() {
+    std::lock_guard<Mutex> guard(_jsWorkersMutex);
     std::vector<Ref<JavaScriptRuntime>> out;
     out.reserve(_jsWorkers.size());
 
@@ -3438,7 +3442,10 @@ std::shared_ptr<snap::valdi_core::JSRuntime> JavaScriptRuntime::createWorker() {
     for (const auto& typeConverter : _typeConverters) {
         workerRuntime->registerTypeConverter(typeConverter.typeName, typeConverter.functionPath);
     }
-    _jsWorkers.emplace_back(weakRef(workerRuntime.get()));
+    {
+        std::lock_guard<Mutex> guard(_jsWorkersMutex);
+        _jsWorkers.emplace_back(weakRef(workerRuntime.get()));
+    }
     return std::dynamic_pointer_cast<snap::valdi_core::JSRuntime>(*workerRuntime->getInnerSharedPtr());
 }
 
