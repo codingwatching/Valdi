@@ -21,6 +21,7 @@
 #include "utils/debugging/Assert.hpp"
 
 #include <future>
+#include <thread>
 
 namespace Valdi {
 
@@ -342,6 +343,17 @@ Result<Value> ValueFunctionWithJSValue::callSyncWithDeadline(const std::chrono::
     } else {
         return Error("JS function timeout");
     }
+}
+
+void ValueFunctionWithJSValue::enqueueSimulatedHangForTesting(std::chrono::milliseconds duration) noexcept {
+    auto taskScheduler = getTaskScheduler();
+    if (taskScheduler == nullptr) {
+        return;
+    }
+    // Occupies the JS thread so a following deadline-bounded sync call times out,
+    // reproducing a busy-JS-queue main-thread hang without real workload.
+    taskScheduler->dispatchOnJsThreadAsync(getContext(),
+                                           [duration](auto& jsEntry) { std::this_thread::sleep_for(duration); });
 }
 
 UntypedValueFunctionWithJSValue::UntypedValueFunctionWithJSValue(IJavaScriptContext& context,

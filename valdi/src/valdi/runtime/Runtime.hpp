@@ -284,6 +284,13 @@ public:
      */
     bool disableHitTestSyncDeadline() const;
 
+    /**
+     * Testing-only: milliseconds of artificial JS-thread hang to enqueue before each
+     * deadline-bounded touch sync call, as controlled by the
+     * VALDI_HIT_TEST_SYNC_DEADLINE_SIMULATED_HANG_MS runtime tweak. 0 = disabled.
+     */
+    int32_t hitTestSyncDeadlineSimulatedHangMs() const;
+
 protected:
     void receivedRenderRequest(const Ref<RenderRequest>& renderRequest) override;
 
