@@ -3370,6 +3370,8 @@ void JavaScriptRuntime::preloadModule(const StringBox& path, int32_t maxDepth) {
 void JavaScriptRuntime::preloadModules(const std::vector<StringBox>& paths, int32_t maxDepth) {
     _resourceManager.warmUpBundles(paths);
 
+    const int32_t chunkSize = _preloadYieldChunkSize;
+
     dispatchOnJsThreadAsync(nullptr, [=](JavaScriptEntryParameters& jsEntry) {
         VALDI_TRACE("Valdi.preloadModules");
 
@@ -3382,7 +3384,10 @@ void JavaScriptRuntime::preloadModules(const std::vector<StringBox>& paths, int3
             return;
         }
 
-        std::initializer_list<JSValueRef> params = {pathsArray, jsEntry.jsContext.newNumber(maxDepth)};
+        // Third arg (chunkSize) is optional in ModuleLoader.preloadBatch; 0 preserves the original
+        // single-task evaluation. > 0 makes it yield between chunks so the watchdog ack can run.
+        std::initializer_list<JSValueRef> params = {
+            pathsArray, jsEntry.jsContext.newNumber(maxDepth), jsEntry.jsContext.newNumber(chunkSize)};
 
         JSFunctionCallContext callContext(jsEntry.jsContext, params.begin(), params.size(), jsEntry.exceptionTracker);
 
@@ -3822,6 +3827,10 @@ Ref<Context> JavaScriptRuntime::getLastDispatchedContext() const {
 
 void JavaScriptRuntime::setModuleLoadDiagnosticsEnabled(bool enabled) {
     _moduleLoadDiagnosticsEnabled = enabled;
+}
+
+void JavaScriptRuntime::setPreloadYieldChunkSize(int32_t chunkSize) {
+    _preloadYieldChunkSize = chunkSize;
 }
 
 std::string JavaScriptRuntime::getCurrentModuleLoadInfo() const {

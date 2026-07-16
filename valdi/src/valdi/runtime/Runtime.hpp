@@ -355,6 +355,7 @@ private:
     void runWithExclusiveJsThreadLock(DispatchFunction&& cb);
     bool disablePersistentStoreEncryption();
     bool enableModuleLoadDiagnostics();
+    int preloadYieldChunkSize();
 };
 
 } // namespace Valdi
