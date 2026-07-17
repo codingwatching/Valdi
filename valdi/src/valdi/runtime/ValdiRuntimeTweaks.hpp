@@ -34,9 +34,6 @@ public:
     bool disableJsLogging() const;
     bool enableRenderRequestContextFix() const;
     bool disableHitTestSyncDeadline() const;
-    // Testing-only: >0 enqueues an artificial JS-thread hang of this many ms before each
-    // deadline-bounded touch sync call, forcing the deadline to fire. 0 (default) = off.
-    int32_t hitTestSyncDeadlineSimulatedHangMs() const;
     // True when VALDI_MAX_VIEW_OPERATIONS_PROCESSING_TIME > 0 (throttling enabled). Gates top-down move order in TS.
     bool useTopDownMoveOrder() const;
     bool enableMmapModuleArchives() const;

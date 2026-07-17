@@ -787,11 +787,6 @@ bool Runtime::disableHitTestSyncDeadline() const {
     return tweaks.get() != nullptr && tweaks->disableHitTestSyncDeadline();
 }
 
-int32_t Runtime::hitTestSyncDeadlineSimulatedHangMs() const {
-    const auto& tweaks = _resourceManager->getRuntimeTweaks();
-    return tweaks.get() != nullptr ? tweaks->hitTestSyncDeadlineSimulatedHangMs() : 0;
-}
-
 void Runtime::registerJavaScriptModuleFactory(const Ref<JavaScriptModuleFactory>& moduleFactory) {
     _javaScriptRuntime->registerJavaScriptModuleFactory(moduleFactory);
 }

@@ -158,54 +158,17 @@ BOOL SCValdiCallPredicateWithEvent(id<SCValdiFunction> predicate,
         if (!view.valdiContext.disableHitTestSyncDeadline) {
             const auto& fn = [(SCValdiFunctionWithCPPFunction *)predicate getFunction];
 
-            NSInteger simulatedHangMs = view.valdiContext.hitTestSyncDeadlineSimulatedHangMs;
-            // Once-per-launch proof-of-life so log bundles can distinguish "path never ran"
-            // from "path ran with no abnormal outcomes".
-            static dispatch_once_t sDeadlinePathLogOnce;
-            dispatch_once(&sDeadlinePathLogOnce, ^{
-                SCLogValdiInfo(@"[ValdiTouchDeadline] deadline path active (250ms), first call site: %s, "
-                               @"simulated hang: %ldms",
-                               callContext, (long)simulatedHangMs);
-            });
-            if (simulatedHangMs > 0) {
-                SCLogValdiWarning(
-                    @"[ValdiTouchDeadline] %s: injecting simulated %ldms JS-thread hang "
-                    @"(VALDI_HIT_TEST_SYNC_DEADLINE_SIMULATED_HANG_MS)",
-                    callContext, (long)simulatedHangMs);
-                fn->enqueueSimulatedHangForTesting(std::chrono::milliseconds(simulatedHangMs));
-            }
-
             Valdi::Value params[] = { event };
-            // steady_clock (not wall clock) so an NTP / leap-second jump can't log a
-            // negative or bogus elapsed time; matches the clock callSyncWithDeadline uses.
-            auto startTime = std::chrono::steady_clock::now();
             auto result = fn->callSyncWithDeadline(std::chrono::milliseconds(250), params, 1);
-            double elapsedMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startTime).count();
-            if (!result.success()) {
-                SCLogValdiError(
-                    @"[ValdiTouchDeadline] %s: sync call exceeded the 250ms deadline (waited %.0fms), dropping event",
-                    callContext, elapsedMs);
-                return NO;
-            }
-            if (elapsedMs > 100) {
-                SCLogValdiWarning(@"[ValdiTouchDeadline] %s: sync call slow, took %.0fms", callContext, elapsedMs);
-            }
-            return result.value().toBool();
+            return result.success() ? result.value().toBool() : NO;
         }
     }
 
     // Legacy path: non-C++ ValueFunction implementations, or when sync deadline is disabled.
-    auto startTime = std::chrono::steady_clock::now();
-    BOOL ret = SCValdiCallActionWithEvent(predicate, event, Valdi::ValueFunctionFlagsCallSync);
-    double elapsedMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startTime).count();
-    if (elapsedMs > 250) {
-        SCLogValdiWarning(@"[ValdiTouchDeadline] %s: legacy unbounded sync call blocked main for %.0fms",
-                          callContext, elapsedMs);
-    }
-    return ret;
+    return SCValdiCallActionWithEvent(predicate, event, Valdi::ValueFunctionFlagsCallSync);
 }
 
-BOOL SCValdiCallSyncActionWithUIEventAndView(id<SCValdiFunction> action, CGPoint location, UIEvent* uiEvent, UIView* view)
+BOOL SCValdiCallHitTestActionWithUIEventAndView(id<SCValdiFunction> action, CGPoint location, UIEvent* uiEvent, UIView* view)
 {
     auto event = SCValdiMakeTouchEvent(view, location, UIGestureRecognizerStatePossible, SCValdiGetPointerDataFromEvent(uiEvent));
 

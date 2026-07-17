@@ -59,9 +59,9 @@ BOOL SCValdiCallPredicateWithEvent(id<SCValdiFunction> predicate,
 }
 #endif // __cplusplus
 
-BOOL SCValdiCallSyncActionWithUIEventAndView(id<SCValdiFunction> action,
-                                             CGPoint location,
-                                             UIEvent* uiEvent,
-                                             UIView* view);
+BOOL SCValdiCallHitTestActionWithUIEventAndView(id<SCValdiFunction> action,
+                                                CGPoint location,
+                                                UIEvent* uiEvent,
+                                                UIView* view);
 
 SC_EXTERN_C_END

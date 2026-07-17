@@ -42,8 +42,6 @@ public:
     void setAllowSyncCall(bool allowSyncCall);
     void setIgnoreIfValdiContextIsDestroyed(bool ignoreIfValdiContextIsDestroyed);
 
-    void enqueueSimulatedHangForTesting(std::chrono::milliseconds duration) noexcept override;
-
 protected:
     virtual Value callJsFunction(JavaScriptEntryParameters& jsEntry,
                                  const JSValue& function,

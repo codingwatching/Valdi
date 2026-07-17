@@ -98,13 +98,6 @@ typedef void (^SCValdiBindAttributesCallback)(__kindof id<SCValdiAttributesBinde
 @property (readonly, nonatomic) BOOL disableHitTestSyncDeadline;
 
 /**
- * Testing-only: milliseconds of artificial JS-thread hang to enqueue before each
- * deadline-bounded touch sync call, forcing the deadline to fire. Controlled via the
- * VALDI_HIT_TEST_SYNC_DEADLINE_SIMULATED_HANG_MS runtime tweak. 0 = disabled.
- */
-@property (readonly, nonatomic) NSInteger hitTestSyncDeadlineSimulatedHangMs;
-
-/**
  Reference to the root view's component's actions.
 
  This is a legacy API used to allow JS code to trigger Objective-C actions.

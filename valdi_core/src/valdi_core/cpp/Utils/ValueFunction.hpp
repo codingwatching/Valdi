@@ -180,13 +180,6 @@ public:
 
     StringBox getDebugDescription() const;
 
-    /**
-     Testing hook: enqueue a task that blocks this function's execution thread for the
-     given duration, simulating a busy queue ahead of a deadline-bounded sync call.
-     No-op for function types without a dispatch thread.
-     */
-    virtual void enqueueSimulatedHangForTesting(std::chrono::milliseconds duration) noexcept {}
-
 protected:
     virtual Result<Value> callSyncWithDeadline(const std::chrono::steady_clock::time_point& deadline,
                                                Value* parameters,
