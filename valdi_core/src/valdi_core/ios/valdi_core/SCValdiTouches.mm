@@ -9,7 +9,6 @@
 #import "valdi_core/SCValdiTouches.h"
 #import "valdi_core/cpp/Events/TouchEvents.hpp"
 #import "valdi_core/SCValdiFunctionWithCPPFunction+CPP.h"
-#import "valdi_core/SCValdiLogger.h"
 #import "valdi_core/SCValdiValueUtils.h"
 #import "valdi_core/SCValdiMarshaller+CPP.h"
 #import "valdi_core/SCValdiError.h"

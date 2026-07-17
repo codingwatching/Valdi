@@ -21,7 +21,6 @@
 #include "utils/debugging/Assert.hpp"
 
 #include <future>
-#include <thread>
 
 namespace Valdi {
 
