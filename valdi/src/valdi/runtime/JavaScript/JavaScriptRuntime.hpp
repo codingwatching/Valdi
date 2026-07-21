@@ -214,8 +214,6 @@ public:
     void setListener(IJavaScriptRuntimeListener* listener, const Weak<SharedPtrRefCountable>& listenerOwner);
     RetainedListener getListener() const;
     void setModuleLoadDiagnosticsEnabled(bool enabled);
-    // Chunk size for cooperative yielding during preloadModules/preloadBatch. 0 = no yielding.
-    void setPreloadYieldChunkSize(int32_t chunkSize);
 
     void fullTeardown();
     void partialTeardown();
@@ -404,9 +402,6 @@ private:
     bool _moduleLoadDiagnosticsEnabled = false;
     mutable Mutex _moduleLoadActivityMutex;
     StringBox _currentModuleLoadPath;
-    // Modules evaluated per JS task before preloadBatch yields (0 = single uninterrupted task).
-    // Set once from Runtime::postInit; read on the JS thread when a preload is dispatched.
-    int32_t _preloadYieldChunkSize = 0;
     // A lock that will block the JS thread until postInit() is called and the initialization has completed
     AsyncGroup _initLock;
     bool _hasGcScheduled = false;

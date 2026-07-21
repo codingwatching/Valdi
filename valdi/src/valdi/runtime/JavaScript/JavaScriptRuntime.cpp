@@ -3370,7 +3370,16 @@ void JavaScriptRuntime::preloadModule(const StringBox& path, int32_t maxDepth) {
 void JavaScriptRuntime::preloadModules(const std::vector<StringBox>& paths, int32_t maxDepth) {
     _resourceManager.warmUpBundles(paths);
 
-    const int32_t chunkSize = _preloadYieldChunkSize;
+    // Read the yield chunk size live (not an init-time snapshot) so a COF ramp takes effect on the
+    // next capture without an app restart, and so it is unaffected by runtime-init vs
+    // config-availability ordering. 0 = evaluate the batch as a single uninterrupted task (default).
+    int32_t chunkSize = 0;
+    if (auto listener = getListener()) {
+        auto runtimeTweaks = listener->getRuntimeTweaks();
+        if (runtimeTweaks != nullptr) {
+            chunkSize = runtimeTweaks->preloadYieldChunkSize();
+        }
+    }
 
     dispatchOnJsThreadAsync(nullptr, [=](JavaScriptEntryParameters& jsEntry) {
         VALDI_TRACE("Valdi.preloadModules");
@@ -3827,10 +3836,6 @@ Ref<Context> JavaScriptRuntime::getLastDispatchedContext() const {
 
 void JavaScriptRuntime::setModuleLoadDiagnosticsEnabled(bool enabled) {
     _moduleLoadDiagnosticsEnabled = enabled;
-}
-
-void JavaScriptRuntime::setPreloadYieldChunkSize(int32_t chunkSize) {
-    _preloadYieldChunkSize = chunkSize;
 }
 
 std::string JavaScriptRuntime::getCurrentModuleLoadInfo() const {

@@ -201,7 +201,6 @@ void Runtime::postInit() {
     if (_javaScriptRuntime != nullptr) {
         _javaScriptRuntime->setListener(this, weakRef(this));
         _javaScriptRuntime->setModuleLoadDiagnosticsEnabled(enableModuleLoadDiagnostics());
-        _javaScriptRuntime->setPreloadYieldChunkSize(preloadYieldChunkSize());
     }
     _viewNodeManager.setRuntime(weakRef(this));
     _contextManager.setListener(this);
@@ -577,15 +576,6 @@ bool Runtime::enableModuleLoadDiagnostics() {
     }
 
     return runtimeTweaks->enableModuleLoadDiagnostics();
-}
-
-int Runtime::preloadYieldChunkSize() {
-    const auto& runtimeTweaks = getRuntimeTweaks();
-    if (runtimeTweaks == NULL) {
-        return 0;
-    }
-
-    return runtimeTweaks->preloadYieldChunkSize();
 }
 
 void Runtime::daemonClientConnected(const Shared<IDaemonClient>& daemonClient) {
