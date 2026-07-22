@@ -1,5 +1,7 @@
 import 'jasmine/src/jasmine';
+import { Style } from 'valdi_core/src/Style';
 import { WebValdiLabel } from '../src/views/WebValdiLabel';
+import { WebValdiLayout } from '../src/views/WebValdiLayout';
 import { WebValdiScroll } from '../src/views/WebValdiScroll';
 
 function installDomStubs() {
@@ -96,7 +98,7 @@ describe('WebValdiLabel – numberOfLines', () => {
     expect((label.htmlElement.style as any).overflow).toBe('hidden');
   });
 
-  it('resets line clamp when set to 0', () => {
+  it('enables unlimited multiline when set to 0', () => {
     installDomStubs();
     const label = new WebValdiLabel(1);
     label.changeAttribute('numberOfLines', 2);
@@ -105,6 +107,20 @@ describe('WebValdiLabel – numberOfLines', () => {
     expect((label.htmlElement.style as any).display).toBe('inline');
     expect((label.htmlElement.style as any).WebkitLineClamp).toBe('');
     expect((label.htmlElement.style as any).overflow).toBe('visible');
+    expect((label.htmlElement.style as any).whiteSpace).toBe('pre-wrap');
+    expect((label.htmlElement.style as any).wordWrap).toBe('break-word');
+  });
+
+  it('restores the single-line default when numberOfLines is cleared', () => {
+    installDomStubs();
+    const label = new WebValdiLabel(1);
+    label.changeAttribute('numberOfLines', 2);
+    label.changeAttribute('numberOfLines', undefined);
+
+    expect((label.htmlElement.style as any).display).toBe('inline');
+    expect((label.htmlElement.style as any).WebkitLineClamp).toBe('');
+    expect((label.htmlElement.style as any).overflow).toBe('visible');
+    expect((label.htmlElement.style as any).whiteSpace).toBe('nowrap');
   });
 
   it('does not throw when numberOfLines is undefined', () => {
@@ -158,5 +174,46 @@ describe('WebValdiScroll – pagingEnabled', () => {
     scroll.changeAttribute('pagingEnabled', false);
 
     expect(child.style.scrollSnapAlign).toBe('');
+  });
+});
+
+describe('WebValdiLayout – style object expansion', () => {
+  afterEach(() => uninstallDomStubs());
+
+  it('expands a Style object passed as the style attribute into per-key styles', () => {
+    installDomStubs();
+    const layout = new WebValdiLayout(1);
+    layout.changeAttribute('style', new Style({ width: 74, height: 74, borderRadius: 4 }));
+
+    expect(String((layout.htmlElement.style as any).width)).toMatch(/^74(px)?$/);
+    expect(String((layout.htmlElement.style as any).height)).toMatch(/^74(px)?$/);
+    expect(String((layout.htmlElement.style as any).borderRadius)).toMatch(/^4(px)?$/);
+  });
+
+  it('leaves non-Style style values on the generic path', () => {
+    installDomStubs();
+    const layout = new WebValdiLayout(1);
+    expect(() => layout.changeAttribute('style', 'not-a-style')).not.toThrow();
+  });
+});
+
+describe('WebValdiLabel – single-line default', () => {
+  afterEach(() => uninstallDomStubs());
+
+  it('defaults to nowrap so short labels stay on one line', () => {
+    installDomStubs();
+    const label = new WebValdiLabel(1);
+    expect((label.htmlElement.style as any).whiteSpace).toBe('nowrap');
+  });
+
+  it('enables wrapping while numberOfLines is set and restores nowrap on reset', () => {
+    installDomStubs();
+    const label = new WebValdiLabel(1);
+    label.changeAttribute('numberOfLines', 2);
+    expect((label.htmlElement.style as any).whiteSpace).toBe('pre-wrap');
+    expect((label.htmlElement.style as any).wordWrap).toBe('break-word');
+
+    label.changeAttribute('numberOfLines', undefined);
+    expect((label.htmlElement.style as any).whiteSpace).toBe('nowrap');
   });
 });

@@ -256,6 +256,21 @@ export class WebValdiLayout {
   }
 
   changeAttribute(attributeName: string, attributeValue: any) {
+    // A whole Style object lands here when a component spreads props through
+    // setAttributes(): that path dispatches via onElementAttributeChangeAny,
+    // which (unlike setAttributeStyle -> onElementAttributeChangeStyle) does not
+    // expand the style per key. Without this, generateStyles('style', ...)
+    // yields {style: <object>} and the element's whole style is silently dropped.
+    if (attributeName === 'style' && attributeValue && typeof attributeValue === 'object') {
+      const styleAttributes = attributeValue.attributes;
+      if (styleAttributes && typeof styleAttributes === 'object') {
+        for (const key of Object.keys(styleAttributes)) {
+          this.changeAttribute(key, styleAttributes[key]);
+        }
+        return;
+      }
+    }
+
     if (isAttributeValidStyle(attributeName)) {
       const generatedStyles = generateStyles(attributeName, attributeValue);
       Object.assign(this.htmlElement.style, generatedStyles);
