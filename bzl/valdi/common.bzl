@@ -20,6 +20,14 @@ _IOS_API_NAME_SUFFIX = "Types"
 
 _IOS_SWIFT_SUFFIX = "Swift"
 
+# The iOS OS constraint applied to valdi_module()'s generated iOS targets via
+# target_compatible_with. Constructed as a Label here so it resolves against
+# Valdi's own repo mapping (which declares the `platforms` bazel_dep) rather
+# than the repo mapping of whichever package calls valdi_module(). A bare
+# "@platforms//os:ios" string would resolve against the caller, forcing every
+# downstream consumer to declare `platforms` itself. See Valdi_Widgets#20.
+_IOS_OS_CONSTRAINT = Label("@platforms//os:ios")
+
 _WEB_OUTPUT_BASE = "web"
 _WEB_DEBUG_ONLY_BASE = paths.join(_WEB_OUTPUT_BASE, "debug")
 _WEB_RELEASE_READY_BASE = paths.join(_WEB_OUTPUT_BASE, "release")
@@ -46,6 +54,7 @@ IOS_OUTPUT_STRINGS_BASE_DIR = _IOS_OUTPUT_STRINGS_BASE_DIR
 
 IOS_API_NAME_SUFFIX = _IOS_API_NAME_SUFFIX
 IOS_SWIFT_SUFFIX = _IOS_SWIFT_SUFFIX
+IOS_OS_CONSTRAINT = _IOS_OS_CONSTRAINT
 IOS_DEFAULT_MODULE_NAME_PREFIX = _IOS_DEFAULT_MODULE_PREFIX
 
 NODE_MODULES_BASE = _NODE_MODULES_BASE

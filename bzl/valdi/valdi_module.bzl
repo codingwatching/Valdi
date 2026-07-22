@@ -16,6 +16,7 @@ load("//bzl/valdi/source_set:utils.bzl", "source_set_select")
 load(
     "common.bzl",
     "IOS_API_NAME_SUFFIX",
+    "IOS_OS_CONSTRAINT",
     "IOS_OUTPUT_BASE",
     "IOS_SWIFT_SUFFIX",
 )
@@ -743,7 +744,7 @@ def _setup_ios_target(name, module_deps, ios_deps, compiled_module_target, ios_m
         generated_objects = impl_generated_objects,
         single_file_codegen = single_file_codegen,
         has_ios_exports = has_ios_exports,
-        target_compatible_with = ["@platforms//os:ios"],
+        target_compatible_with = [IOS_OS_CONSTRAINT],
         tags = [
             "valdi_objc",
         ],
@@ -768,7 +769,7 @@ def _setup_ios_target(name, module_deps, ios_deps, compiled_module_target, ios_m
         generated_objects = api_generated_objects,
         single_file_codegen = single_file_codegen,
         has_ios_exports = has_ios_exports,
-        target_compatible_with = ["@platforms//os:ios"],
+        target_compatible_with = [IOS_OS_CONSTRAINT],
         visibility = visibility,
     )
 
@@ -794,7 +795,7 @@ def _setup_ios_target(name, module_deps, ios_deps, compiled_module_target, ios_m
         data = resources,
         copts = ["-Osize", "-Xfrontend", "-internalize-at-link", "-Xcc", "-I."],
         linkopts = ["-dead_strip"],
-        target_compatible_with = ["@platforms//os:ios"],
+        target_compatible_with = [IOS_OS_CONSTRAINT],
         visibility = visibility,
     )
 
