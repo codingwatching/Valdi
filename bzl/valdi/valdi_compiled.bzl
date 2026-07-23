@@ -230,7 +230,7 @@ valdi_compiled = rule(
         "srcs": attr.label_list(
             doc = "List of sources for this module",
             mandatory = True,
-            allow_files = [".js", ".ts", ".tsx", ".json"],
+            allow_files = [".js", ".ts", ".tsx", ".json", ".bin"],
         ),
         "legacy_vue_srcs": attr.label_list(
             doc = "List of legacy .vue sources for this module",

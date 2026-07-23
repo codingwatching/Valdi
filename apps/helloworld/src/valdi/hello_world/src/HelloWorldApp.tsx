@@ -4,6 +4,7 @@ import { systemFont } from 'valdi_core/src/SystemFont';
 import { Label, ScrollView } from 'valdi_tsx/src/NativeTemplateElements';
 
 import res from '../res';
+import { ByteExactImageExample } from './ByteExactImageExample';
 import { onRootComponentCreated } from './CppModule';
 import { APP_NAME } from './NativeModule';
 
@@ -37,6 +38,7 @@ export class App extends Component<ViewModel, ComponentContext> {
           <image src={res.emoji} height="100%" tint="#808080" marginRight={10} />
           <label style={styles.title} value={`Welcome to ${APP_NAME}!`} font={systemFont(20)} />
         </layout>
+        <ByteExactImageExample />
       </scroll>
     </view>;
   }
